@@ -80,22 +80,6 @@ class User(db.Model):
         """
         return User.default_context.get_value_for_datastore(self)
 
-    def can_edit_task(self, task):
-        """Returns true if this user can edit |task|.
-
-        A user can edit the task if he is the owner. Admin users can edit
-        all tasks. This function should always be used before allowing
-        a user to change a task.
-
-        Args:
-            task: The task model instance to check this users
-                permissions for.
-
-        Returns:
-            True if this user has permission to edit the task.
-        """
-        return self.admin or task.user_key() == self.key()
-
 
 class Task(db.Model):
     """

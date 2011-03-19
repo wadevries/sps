@@ -139,6 +139,36 @@ def assign_task(user, task, assignee):
     return task
 
 
+def set_task_completed(domain, user, task, completed):
+    """Sets the completion status of a task.
+
+    A task can only be set to completed if |user| is the assignee of
+    task, or an admin. The updated task will be stored in the
+    datstore.
+
+    Args:
+        domain: The domain identifier string
+        user: An instance of the User model
+        task: The task id or key name
+        completed: The new value of the completed property of the task
+
+    Returns:
+        An instance of the Task model if setting the property was
+        succesful.
+
+    Raises:
+        ValueError: The task does not exist or the user is not the
+            assignee of the task.
+    """
+    task_instance = get_task(domain, task)
+    if (not task_instance or
+        not task_instance.assignee_key() == user.key()):
+        raise ValueError("Invalid task or user rights")
+    task.completed = completed
+    task.put()
+    return task
+
+
 def get_all_open_tasks(domain):
     """
     Returns all tasks from |domain| that are not yet completed and not

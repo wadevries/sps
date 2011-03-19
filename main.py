@@ -59,11 +59,6 @@ def get_and_validate_user(domain_key_name):
     return user
 
 
-def template_path(template_file):
-    """Returns the full path of the |templat_file|"""
-    return os.path.join(os.path.dirname(__file__),
-                        'templates/overview.html')
-
 def assignee_description(task):
     """Returns a string describing the assignee of a task"""
     return (task.assignee.name if task.assignee else "&#60not assigned&#62")
@@ -191,13 +186,10 @@ class TaskComplete(webapp.RequestHandler):
         if not user:
             self.error(403)
             return
-        task = Task.get_by_id(task_id, parent=user.domain_key())
-        if not task or not user.can_edit_task(task):
+        try:
+            api.set_task_completed(domain, user, task_id, completed)
+        except ValueError:
             self.error(403)
-            logging.error("No task with id '%d'" % task_id)
-            return
-        task.completed = completed
-        task.put()
 
 
 class AssignTask(webapp.RequestHandler):
