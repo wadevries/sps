@@ -27,7 +27,14 @@ class Domain(db.Model):
     title.
     """
     name = db.StringProperty(required=True)
+    # The key names of all users that have 'admin' rights in this
+    # domain. The user who creates a domain becomes its admin by
+    # default, others have to be added later
+    admins = db.ListProperty(str, default=[])
 
+    @staticmethod
+    def key_from_name(domain_identifier):
+        return db.Key.from_path('Domain', domain_identifier)
 
 class Context(db.Model):
     """
@@ -54,24 +61,11 @@ class User(db.Model):
     # Whether the user has admin rights. Admins can edit tasks that
     # are not their own.
     admin = db.BooleanProperty(default=False)
-    # Domain this user belongs to. All tasks of this user will be set
-    # in this domain.
-    #
-    # TODO(tijmen): Later this can be expanded to a
-    # list of domains.
-    domain = db.ReferenceProperty(required=True,
-                                  reference_class=Domain,
-                                  collection_name="users")
+    # A list of all domain identifiers (key names) that this user is
+    # a member of.
+    domains = db.ListProperty(str, default=[])
     # The default context for new tasks for this user
-    default_context = db.ReferenceProperty(required=True,
-                                           reference_class=Context)
-
-    def domain_key(self):
-        """
-        Returns the key of the |domain| without dereferencing the
-        property.
-        """
-        return User.domain.get_value_for_datastore(self)
+    default_context = db.ReferenceProperty(reference_class=Context)
 
     def default_context_key(self):
         """
@@ -123,7 +117,6 @@ class Task(db.Model):
                                     reference_class=User,
                                     collection_name="assigned_tasks")
     context = db.ReferenceProperty(reference_class=Context,
-                                   required=True,
                                    collection_name="tasks")
     # Whether or not the task is completed.
     completed = db.BooleanProperty(default=False)

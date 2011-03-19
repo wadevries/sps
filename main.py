@@ -71,13 +71,19 @@ class Landing(webapp.RequestHandler):
     def get(self):
         user = get_user()
         if not user:
-            # do something with login
-            self.response.out.write("Not logged in")
-            return
+            guser = users.get_current_user()
+            user = User(key_name=guser.user_id(),
+                        name=guser.nickname())
+            user.put()
+
+        keys = [db.Key.from_path('Domain', domain)
+                for domain in user.domains]
+        domains = Domain.get(keys)
         template_values = {
             'username' : user.name,
-            'domains' : [{ 'identifier': user.domain_key().name(),
-                           'name': user.domain.name }],
+            'domains' : [{ 'identifier': domain.key().name(),
+                           'name': domain.name }
+                         for domain in domains],
             }
         path = os.path.join(os.path.dirname(__file__),
                         'templates/landing.html')
@@ -94,12 +100,13 @@ class DomainOverview(webapp.RequestHandler):
         if not user:
             self.error(404)
             return
-        your_tasks = api.get_all_assigned_tasks(user)
-        open_tasks = api.get_all_open_tasks(user.domain_key())
-        all_tasks = api.get_all_tasks(user.domain_key())
+        your_tasks = api.get_all_assigned_tasks(domain_identifier, user)
+        open_tasks = api.get_all_open_tasks(domain_identifier)
+        all_tasks = api.get_all_tasks(domain_identifier)
+        domain = Domain.get_by_key_name(domain_identifier)
         template_values = {
             'domain': domain_identifier,
-            'domain_name': user.domain.name,
+            'domain_name': domain.name,
             'username': user.name,
             'user_key_name': user.key().name(),
             'all_tasks': [{ 'title': task.title(),
@@ -131,8 +138,9 @@ class TaskDetail(webapp.RequestHandler):
             error(404)
             return
         user = get_user()
+        domain = Domain.get_by_key_name(domain_identifier)
         template_values = {
-            'domain_name': user.domain.name,
+            'domain_name': domain.name,
             'username': user.name,
             'task_description': task.description,
             'task_assignee': assignee_description(task),
@@ -208,15 +216,34 @@ class AssignTask(webapp.RequestHandler):
         if not user:
             self.error(403)
             return
-        task = Task.get_by_id(task_id, parent=user.domain_key())
+        task = Task.get_by_id(task_id, parent=Domain.key_from_name(domain))
         assignee = User.get_by_key_name(assignee)
         if not task or not assignee:
             self.error(403)
             logging.error("No task or assignee")
             return
-        api.assign_task(user, task, assignee)
+        api.assign_task(domain, user, task, assignee)
         self.response.out.write("Task '%s' assigned to '%s'" %
                                 (task.title(), assignee.name))
+
+
+class CreateDomain(webapp.RequestHandler):
+    """Handler to create new domains.
+    """
+    def post(self):
+        try:
+            domain_id = self.request.get('domain')
+            title = self.request.get('title')
+        except (TypeError, ValueError):
+            self.error(403)
+            return
+        user = get_user()
+        domain = api.create_domain(domain_id, title, user)
+        if not domain:
+            self.response.out.write("Could not create domain")
+            return
+        self.response.out.write("Created domain '%s'" % domain.key().name())
+
 
 _VALID_DOMAIN_KEY_NAME = '[a-z][a-z0-9-]{1,100}'
 
@@ -229,6 +256,7 @@ _DOMAIN_AND_TASK_URL = '%s/task/(%s)' % (_DOMAIN_URL, _VALID_TASK_KEY_NAME)
 application = webapp.WSGIApplication([('/create-task', CreateTask),
                                       ('/set-task-completed', TaskComplete),
                                       ('/assign-task', AssignTask),
+                                      ('/create-domain', CreateDomain),
                                       (_DOMAIN_URL + '/', DomainOverview),
                                       (_DOMAIN_AND_TASK_URL, TaskDetail),
                                       ('/', Landing)])
