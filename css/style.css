@@ -1,0 +1,11 @@
+body { width: 800px; margin: 0 auto; }
+
+textarea { width: 600px; height: 100px; }
+
+td.checkbox { width: 60px; }
+
+td.task-title { width: 600px; }
+
+td.assign-button { width: 140px; }
+
+td.assignee { width: 140px; }

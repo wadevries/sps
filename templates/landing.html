@@ -1,0 +1,21 @@
+<html>
+<head>
+  <link rel="stylesheet" href="/css/blueprint/screen.css" type="text/css" media="screen, projection">
+  <link rel="stylesheet" href="/css/blueprint/print.css" type="text/css" media="print">
+  <!--[if lt IE 8]><link rel="stylesheet" href="/css/blueprint/ie.css" type="text/css" media="screen, projection"><![endif]-->
+  <link rel="stylesheet" href="/css/style.css" type="text/css">
+<body>
+<h1>Simple Planning System</h1>
+logged in as: <b> {{ username }} </b>
+<hr>
+
+<h3>Your Domains</h3>
+<form>
+<ul>
+  {% for domain in domains %}
+  <li><a href="/d/{{ domain.identifier }}/">{{ domain.name }}</a>
+  {% endfor %}
+</ul>
+
+</body>
+</html>

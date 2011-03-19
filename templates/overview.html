@@ -1,0 +1,76 @@
+<html>
+<head>
+  <link rel="stylesheet" href="/css/blueprint/screen.css" type="text/css" media="screen, projection">
+  <link rel="stylesheet" href="/css/blueprint/print.css" type="text/css" media="print">
+  <!--[if lt IE 8]><link rel="stylesheet" href="/css/blueprint/ie.css" type="text/css" media="screen, projection"><![endif]-->
+  <link rel="stylesheet" href="/css/style.css" type="text/css">
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.5.1/jquery.min.js"></script>
+  <script type="text/javascript">
+    $(document).ready(function() {
+      $("input[type=checkbox]").click(function() {
+        $.post('/set-task-completed', { id: $(this).attr("value"), completed: this.checked, domain: "{{ domain }}" });
+      });
+    });
+  </script>
+</head>
+<body>
+<h1>{{ domain_name }}</h1>
+logged in as: <b> {{ username }} </b>
+<hr>
+
+<h3>Your Tasks</h3>
+<form>
+  <table>
+    {% for task in your_tasks %}
+    <tr>
+      <td class="checkbox">
+	<input type="checkbox" name="completed" value="{{ task.id }}" {% if task.completed %} checked {% endif %}>
+      </td>
+      <td class="task-title">{{ task.title }} <a href="task/{{ task.id }}">(details)</a></td>
+    </tr>
+    {% endfor %}
+  </table>
+</form>
+
+<h3>Open Tasks</h3>
+<table>
+  {% for task in open_tasks %}
+  <tr>
+    <td class="checkbox"><form><input type="checkbox" disabled></form></td>
+    <td class="task-title">{{ task.title}}  <a href="task/{{ task.id }}">(details)</td>
+    <td class="assign-button">
+      <form action="/assign-task" method="post">
+	<input type="submit" value="Assign to self">
+	<input type="hidden" name="assignee" value="{{ user_key_name }}">
+	<input type="hidden" name="id" value="{{ task.id }}">
+	<input type="hidden" name="domain" value="{{ domain }}">
+      </form>
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+
+<h3>All Tasks</h3>
+<table>
+  {% for task in all_tasks %}
+  <tr>
+    <td class="checkbox">
+      <form><input type="checkbox" {% if task.completed %}checked{% endif %} disabled></form></td>
+    <td class="task-title">{{ task.title }}  <a href="task/{{ task.id }}">(details)</td>
+    <td class="assignee">{{ task.assignee }}</td>
+  </tr>
+  {% endfor %}
+</table>
+
+
+<h3>New Task</h3>
+<form action="/create-task" method="post">
+Task description. The first line of the description will be used as the
+title of the task.
+<textarea cols="81" rows="4" name="description"></textarea><br>
+<input type="checkbox" name="assign_to_self" checked> assign task to yourself<br>
+<input type="hidden" name="domain" value="{{ domain }}">
+<input type="submit" value="Create Task" />
+</form>
+</body>
+</html>
