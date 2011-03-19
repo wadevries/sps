@@ -4,18 +4,27 @@
   <link rel="stylesheet" href="/css/blueprint/print.css" type="text/css" media="print">
   <!--[if lt IE 8]><link rel="stylesheet" href="/css/blueprint/ie.css" type="text/css" media="screen, projection"><![endif]-->
   <link rel="stylesheet" href="/css/style.css" type="text/css">
+</head>
 <body>
 <h1>Simple Planning System</h1>
 logged in as: <b> {{ username }} </b>
 <hr>
 
 <h3>Your Domains</h3>
-<form>
 <ul>
   {% for domain in domains %}
   <li><a href="/d/{{ domain.identifier }}/">{{ domain.name }}</a>
   {% endfor %}
 </ul>
+
+<h3>Create New Domain</h3>
+<form action="/create-domain" method="post">
+  Domain Identifier (lowercase alphanumeric string less than 100 characters)<br>
+  <input type="text" maxlength="100" name="domain"><br>
+  Domain Name<br>
+  <input type="text" maxlength="100" name="title"><br>
+  <input type="submit" value="Create Domain">
+</form>
 
 </body>
 </html>

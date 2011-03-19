@@ -22,22 +22,29 @@ from google.appengine.ext import db
 
 from model import Domain, Task, Context, User
 
+import re
 
-def member_of_domain(domain, user):
-    """Returns true if user is a member of the domain.
+VALID_DOMAIN_IDENTIFIER = r'[a-z][a-z0-9-]{1,100}'
 
-    Test if the |user| is a member of the domain with
-    the given key name.
+
+
+def member_of_domain(domain, user, *args):
+    """Returns true iff all the users are members of the domain.
 
     Args:
         domain: The domain key name.
-        user: An instance of the User model class.
+        user: Instance of the User model class
+        *args: Instances of the User model class
 
     Returns:
-        True if the user is a member of the domain
+        True if all the users are members of the domain.
     """
-    domain_key = db.Key.from_path('Domain', domain)
-    return user.domain_key() == domain_key
+    if not domain in user.domains:
+        return False
+    for other in args:
+        if not domain in other.domains:
+            return False
+    return True
 
 
 def get_task(domain, task):
@@ -51,7 +58,7 @@ def get_task(domain, task):
     Returns:
         A task instance or None if no task exists.
     """
-    domain_key = db.Key.from_path('Domain', domain)
+    domain_key = Domain.key_from_name(domain)
     try:
         task_id = int(task)
         return Task.get_by_id(task_id, parent=domain_key)
@@ -81,11 +88,9 @@ def create_task(domain, user, description, assignee=None):
     Raises:
         ValueError: The |assignee| and |user| domain do not match.
     """
-    if not member_of_domain(domain, user):
-        return None
-    if assignee and assignee.domain_key() != user.domain_key():
+    if assignee and not member_of_domain(domain, user, assignee):
         raise ValueError("Assignee and user domain do not match")
-    task = Task(parent=user.domain_key(),
+    task = Task(parent=Domain.key_from_name(domain),
                 description=description,
                 user=user,
                 assignee=assignee,
@@ -94,7 +99,7 @@ def create_task(domain, user, description, assignee=None):
     return task
 
 
-def assign_task(user, task, assignee):
+def assign_task(domain, user, task, assignee):
     """Assign |task| to assignee.
 
     Sets the assignee property of |task|. |user| is the user
@@ -107,10 +112,11 @@ def assign_task(user, task, assignee):
     - The |user| has admin rights. Admins can always change the assignee.
 
     Args:
+        domain: The domain identifier
         user: A User model instance of the user performing the assignment
             operation.
         task: A Task model instance of the task whose assignee is being set.
-            assignee: A User model instance of the future assignee of the task.
+        assignee: A User model instance of the future assignee of the task.
 
     Returns:
         The task instance. The assignee will be set and the task instance
@@ -120,7 +126,7 @@ def assign_task(user, task, assignee):
         ValueError: If none of the above conditions are met or if
             the user and assignee are not in the same domain.
     """
-    if assignee.domain_key() != user.domain_key():
+    if not member_of_domain(domain, user, assignee):
         raise ValueError("Assignee and user domain do not match")
 
     def can_assign():
@@ -164,9 +170,50 @@ def set_task_completed(domain, user, task, completed):
     if (not task_instance or
         not task_instance.assignee_key() == user.key()):
         raise ValueError("Invalid task or user rights")
-    task.completed = completed
-    task.put()
+    import logging
+    task_instance.completed = completed
+    task_instance.put()
     return task
+
+
+def create_domain(domain, domain_title, user):
+    """Creates a new domain, if none already exists with that identifier.
+
+    The user will become an admin on the newly created domain, and the
+    domain will be added to the list of domains of the user. The updates
+    will be stored in the datastore.
+
+    Args:
+        domain: The domain identifier of the new domain. Must be a lowercase
+            alphanumeric string of length less than 100. The identifier
+            must match the VALID_DOMAIN_IDENTIFIER regexp.
+        domain_title: The string title of the new domain. The string must
+            be non-empty.
+        user: Instance of the User model that creates the domain.
+
+    Returns:
+        The newly created Domain instance. |user| will be set as
+        admin of the new domain. Returns None if a domain already
+        exists with that identifier, the identifier is not valid or
+        the domain_title is empty.
+    """
+    domain_title = domain_title.splitlines()[0].strip()
+    if (not re.match(VALID_DOMAIN_IDENTIFIER, domain) or
+        not domain_title):
+        return None
+    existing = Domain.get_by_key_name(domain)
+    if existing:
+        return None
+    new_domain = Domain(key_name=domain,
+                        name=domain_title,
+                        admins=[user.key().name()])
+    new_domain.put()
+    def txn(user_key):
+        txn_user = User.get(user_key)
+        txn_user.domains.append(domain)
+        txn_user.put()
+    db.run_in_transaction(txn, user.key())
+    return new_domain
 
 
 def get_all_open_tasks(domain):
@@ -175,24 +222,25 @@ def get_all_open_tasks(domain):
     assigned to anyone.
 
     Args:
-        domain: An instance or key of a Domain model.
+        domain: The domain identifier string
 
     Returns:
         A list of Task model instances that are not yet
         completed and do not have an assignee. The tasks will be ordered
         by their time, with the oldest tasks first.
     """
-    query = Task.all().ancestor(domain).\
+    query = Task.all().ancestor(Domain.key_from_name(domain)).\
         filter('completed =', False).\
         filter('assignee =', None).\
         order('-time')
     return query.fetch(50)
 
 
-def get_all_assigned_tasks(user):
-    """Returns all tasks that are assigned to |user|.
+def get_all_assigned_tasks(domain, user):
+    """Returns all tasks that are assigned to |user| in |domain|.
 
     Args:
+        domain: The domain identifier string
         user: An instance of the User model.
 
     Returns:
@@ -201,7 +249,7 @@ def get_all_assigned_tasks(user):
         status, with uncompleted tasks first. A secondary order is on time,
         with newest tasks first.
     """
-    query = user.assigned_tasks.ancestor(user.domain_key()).\
+    query = user.assigned_tasks.ancestor(Domain.key_from_name(domain)).\
         order("completed").\
         order("-time")
     return query.fetch(50)
@@ -211,12 +259,12 @@ def get_all_tasks(domain):
     """Returns all the tasks in the |domain|.
 
     Args:
-        domain: A Domain model instance or key.
+        domain: The domain identifier string
 
     Returns:
         A list of at most 50 task instances of |domain|, ordered on task
         creation time, with the newest task first.
     """
-    query = Task.all().ancestor(domain).\
+    query = Task.all().ancestor(Domain.key_from_name(domain)).\
         order('-time')
     return query.fetch(50)
