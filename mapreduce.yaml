@@ -1,0 +1,20 @@
+mapreduce:
+- name: Migrate tasks
+  mapper:
+    input_reader: mapreduce.input_readers.DatastoreInputReader
+    handler: mappers.migrate_task
+    params:
+    - name: entity_kind
+      default: model.Task
+    - name: processing_rate
+      default: 1
+- name: Migrate users
+  mapper:
+    input_reader: mapreduce.input_readers.DatastoreInputReader
+    handler: mappers.migrate_user
+    params:
+    - name: entity_kind
+      default: model.User
+    - name: processing_rate
+      default: 1
+
