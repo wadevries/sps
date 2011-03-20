@@ -18,21 +18,19 @@ point, these functions have to be transformed to a JSON-based api, but
 for now just return python objects. The transformation to JSON should
 be pretty straightforward.
 """
+import re
 from google.appengine.ext import db
-
 from model import Domain, Task, Context, User
 
-import re
 
 VALID_DOMAIN_IDENTIFIER = r'[a-z][a-z0-9-]{1,100}'
-
 
 
 def member_of_domain(domain, user, *args):
     """Returns true iff all the users are members of the domain.
 
     Args:
-        domain: The domain key name.
+        domain: The domain identifier
         user: Instance of the User model class
         *args: Instances of the User model class
 
@@ -51,7 +49,7 @@ def get_task(domain, task):
     """Gets a task in a domain.
 
     Args:
-        domain: The domain key name
+        domain: The domain identifier
         task: The task key id or name. Can either be an int
             or a string.
 
@@ -62,7 +60,7 @@ def get_task(domain, task):
     try:
         task_id = int(task)
         return Task.get_by_id(task_id, parent=domain_key)
-    except (ValueError):
+    except ValueError:
         return Task.get_by_name(task, parent=domain_key)
 
 
@@ -81,13 +79,15 @@ def create_task(domain, user, description, assignee=None):
             A value of None indicates no assignee for this task.
 
     Returns:
-        The model instance of the created task. If the user is not
-        a member of domain, then the task will not be created and
-        None will be returned.
+        The model instance of the created task.
 
     Raises:
-        ValueError: The |assignee| and |user| domain do not match.
+        ValueError: The |assignee| and |user| domain do not match or
+            the user is not a member of domain.
     """
+    if not member_of_domain(domain, user):
+        raise ValueError("User '%s' not a member of domain '%s'" %
+                         (user.name, domain))
     if assignee and not member_of_domain(domain, user, assignee):
         raise ValueError("Assignee and user domain do not match")
     task = Task(parent=Domain.key_from_name(domain),
