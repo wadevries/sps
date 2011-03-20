@@ -18,6 +18,16 @@
 logged in as: <b> {{ username }} </b>
 <hr>
 
+<h3>New Task</h3>
+<form action="/create-task" method="post">
+Task description. The first line of the description will be used as the
+title of the task.
+<textarea  name="description"></textarea><br>
+<input type="checkbox" name="assign_to_self" checked> assign task to yourself<br>
+<input type="hidden" name="domain" value="{{ domain }}">
+<input type="submit" value="Create Task" />
+</form>
+<br>
 <h3>Your Tasks</h3>
 <form>
   <table>
@@ -62,15 +72,5 @@ logged in as: <b> {{ username }} </b>
   {% endfor %}
 </table>
 
-
-<h3>New Task</h3>
-<form action="/create-task" method="post">
-Task description. The first line of the description will be used as the
-title of the task.
-<textarea cols="81" rows="4" name="description"></textarea><br>
-<input type="checkbox" name="assign_to_self" checked> assign task to yourself<br>
-<input type="hidden" name="domain" value="{{ domain }}">
-<input type="submit" value="Create Task" />
-</form>
 </body>
 </html>
