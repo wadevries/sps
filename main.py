@@ -13,15 +13,43 @@
 #  limitations under the License.
 
 import os
+import logging
 from google.appengine.ext import webapp
 from google.appengine.ext.webapp import template
 from google.appengine.ext.webapp.util import run_wsgi_app
 from google.appengine.ext import db
 from google.appengine.api import users
-import logging
+from appengine_utilities.sessions import Session
 
 from model import Task, Context, Domain, User
 import api
+
+
+def add_message(session, message):
+    """Adds a message to the current user's session.
+
+    Args:
+        session: a Session object, initialized with the request
+        message: a string message
+
+    The message is stored in the session, so it can be read in a later request.
+    """
+    if 'messages' not in session:
+        session['messages'] = []
+    session['messages'] = session['messages'] + [message]
+
+def get_and_delete_messages(session):
+    """Retrieves all messages in the current user's session, and clears them.
+
+    Args:
+        session: a Session object, initialized with the request
+
+    Returns:
+        A list of messages (strings)
+    """
+    messages = session.setdefault('messages', default=[])
+    del session['messages']
+    return messages
 
 
 def get_user():
@@ -100,11 +128,14 @@ class Landing(webapp.RequestHandler):
         keys = [db.Key.from_path('Domain', domain)
                 for domain in user.domains]
         domains = Domain.get(keys)
+        session = Session(writer='cookie',
+                          wsgiref_headers=self.response.headers)
         template_values = {
             'username' : user.name,
             'domains' : [{ 'identifier': domain.key().name(),
                            'name': domain.name }
                          for domain in domains],
+            'messages': get_and_delete_messages(session),
             }
         path = os.path.join(os.path.dirname(__file__),
                         'templates/landing.html')
@@ -117,6 +148,8 @@ class DomainOverview(webapp.RequestHandler):
     shows all tasks for a user and all the available tasks.
     """
     def get(self, domain_identifier):
+        session = Session(writer='cookie',
+                          wsgiref_headers=self.response.headers)
         user = get_and_validate_user(domain_identifier)
         if not user:
             self.error(404)
@@ -128,11 +161,12 @@ class DomainOverview(webapp.RequestHandler):
         template_values = {
             'domain_name': domain.name,
             'domain_identifier': domain_identifier,
-            'user_name': user.name,
-            'user_identifier': user.identifier(),
+            'username': user.name,
+            'user_key_name': user.key().name(),
+            'messages': get_and_delete_messages(session),
             'all_tasks': _task_template_values(all_tasks, user),
             'your_tasks': _task_template_values(your_tasks, user),
-            'open_tasks': _task_template_values(open_tasks, user)
+            'open_tasks': _task_template_values(open_tasks, user),
             }
         path = os.path.join(os.path.dirname(__file__),
                             'templates/overview.html')
@@ -150,6 +184,8 @@ class TaskDetail(webapp.RequestHandler):
             return
         user = get_user()
         domain = Domain.get_by_key_name(domain_identifier)
+        session = Session(writer='cookie',
+                          wsgiref_headers=self.response.headers)
         subtasks = api.get_all_subtasks(domain_identifier, task)
         parent_task = task.parent_task
         parent_identifier = parent_task.identifier() if parent_task else ""
@@ -159,6 +195,7 @@ class TaskDetail(webapp.RequestHandler):
             'domain_identifier': domain_identifier,
             'user_name': user.name,
             'user_identifier': user.identifier(),
+            'messages': get_and_delete_messages(session),
             'task_description': task.description,
             'task_assignee': assignee_description(task),
             'task_identifier':task.identifier(),
@@ -192,15 +229,18 @@ class CreateTask(webapp.RequestHandler):
         if not user:
             self.error(401)
             return
+        self.session = Session(writer='cookie',
+                               wsgiref_headers=self.response.headers)
         assignee = user if self_assign else None
         if not parent_identifier:
             parent_identifier = None
-        api.create_task(domain,
-                        user,
-                        description,
-                        assignee=assignee,
-                        parent_task=parent_identifier)
-        self.response.out.write("Task created")
+        task = api.create_task(domain,
+                               user,
+                               description,
+                               assignee=assignee,
+                               parent_task=parent_identifier)
+        add_message(self.session, "Task '%s' created" % task.title())
+        self.redirect('/d/%s/' % domain)
 
 
 class TaskComplete(webapp.RequestHandler):
@@ -251,8 +291,33 @@ class AssignTask(webapp.RequestHandler):
             logging.error("No task or assignee")
             return
         api.assign_task(domain, user, task, assignee)
-        self.response.out.write("Task '%s' assigned to '%s'" %
+        session = Session(writer='cookie',
+                          wsgiref_headers=self.response.headers)
+        add_message(session, "Task '%s' assigned to '%s'" %
                                 (task.title(), assignee.name))
+        self.redirect('/d/%s/' % domain)
+
+
+class CreateDomain(webapp.RequestHandler):
+    """Handler to create new domains.
+    """
+    def post(self):
+        try:
+            domain_id = self.request.get('domain')
+            title = self.request.get('title')
+        except (TypeError, ValueError):
+            self.error(403)
+            return
+        user = get_user()
+        domain = api.create_domain(domain_id, title, user)
+        if not domain:
+            self.response.out.write("Could not create domain")
+            return
+        session = Session(writer='cookie',
+                          wsgiref_headers=self.response.headers)
+        add_message(session, "Created domain '%s'" % domain.key().name())
+        self.redirect('/d/%s/' % domain.key().name())
+
 
 
 class CreateDomain(webapp.RequestHandler):

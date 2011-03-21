@@ -18,6 +18,14 @@
 logged in as: <b> {{ user_name|escape }} </b>
 <hr>
 
+{% if messages %}
+<ul>
+{% for message in messages %}
+<li>{{ message }}</li>
+{% endfor %}
+</ul>
+{% endif %}
+
 <h3>New Task</h3>
 <form action="/create-task" method="post">
 Task description. The first line of the description will be used as the
@@ -46,7 +54,8 @@ title of the task.
 <table>
   {% for task in open_tasks %}
   <tr>
-    <td class="checkbox"><form><input type="checkbox" disabled></form></td>
+    <td class="checkbox">
+      <form><input type="checkbox" disabled></form></td>
     {% include 'task-title-column.html' %}
     <td class="assign-button">
       <form action="/assign-task" method="post">

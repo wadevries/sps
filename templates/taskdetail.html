@@ -18,6 +18,14 @@
 logged in as: <b> {{ user_name|escape }} </b>
 <hr>
 
+{% if messages %}
+<ul>
+{% for message in messages %}
+<li>{{ message }}</li>
+{% endfor %}
+</ul>
+{% endif %}
+
 <h3>Task Description</h3>
 {% if parent_identifier %}
 Subtask of <a href="/d/{{ domain_identifier }}/task/{{ parent_identifier }}">{{ parent_title }}</a><br>

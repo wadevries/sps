@@ -10,6 +10,14 @@
 logged in as: <b> {{ username }} </b>
 <hr>
 
+{% if messages %}
+<ul>
+{% for message in messages %}
+<li>{{ message }}</li>
+{% endfor %}
+</ul>
+{% endif %}
+
 <h3>Your Domains</h3>
 <ul>
   {% for domain in domains %}
