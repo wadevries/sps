@@ -2,22 +2,27 @@
 
 ## Overview
 
-The planning system is designed to facilitate the planning of both
-complex large projects, as well as keep track of the simplest atomic
-tasks in those projects. To support this functionality, the planner is
-a heirarchical system, with all the advanced functionality derived
-from a basic datastructure.  Most importantly, the planner must be
-simple to use. That is, entering a tasks must be as simple as entering
-a single line describing the task and then pressing enter.
+The Simple Planning System is designed to facilitate the planning and
+tracking of tasks in projects with multiple users. To ensure that it
+is complete, it must be able to keep track of the smallest atomic
+tasks of every user in those projects. The planner is a hierarchical
+system, with all the advanced functionality derived from a basic
+datastructure. Most importantly, the planner must be simple to
+use. That is, entering a tasks must be as simple as entering a single
+line describing the task and then pressing enter.
+
+## Specification
 
 The central component of the planner is the Task, which represents
 something that must be done. This can be a very large task, such as
-'build a product', to a simple task like 'change font size of the
+'build a product', to a specific task like 'change font size of the
 subtitles in the tutorial screen'. Tasks can be divided into subtasks,
 each containing a part of the work that is required to complete the
 parent task. Subtasks are tasks themselves, and as such can be divided
-into subtasks again. A task with no subtasks is called an 'atomic
-task', and represent a single bit of work to be done by a single person.
+into subtasks again. A task with subtasks is called a 'composite
+task', and conversely, a task without subtasks is called an 'atomic
+task'. An atomtic task represents a single bit of work to be done by a
+single person.
 
 A tasks if finished if all subtasks are completed, or, if the task
 does not have any subtasks, when itself is completed.
@@ -28,17 +33,16 @@ can be started. It is not possible to create a circular reference in
 this way. A task with a dependency that is not complete cannot be
 completed itself.
 
-Task have an assignee property, which is the person that is supposed
-to complete the task. Atomic tasks have a single person as
-assignee. The assignees of a composite task is the union of all
-assignees in its subtasks.
+Atomic tasks have an assignee property, which is the person that is
+supposed to complete the task. The assignees of a composite task is
+the union of all assignees in its subtasks.
 
 Tasks have various other properties, such as a status that can contain
 custom information about the task, and an estimated length/duration
 for the task. The different statuses of a task are user
 configurable. Whether a task is complete or not is not a status, but a
 separate field in the task, due to its special meaning in the task
-heirarchy.
+hierarchy.
 
 The second component of the planner are contexts. Every task has a
 context. A context relates to the persons or entities that are
@@ -47,7 +51,7 @@ company. Contexts are used to group tasks when it is not appropriate
 to group the tasks through a single parent task, as a context is not
 something that has to be done or can be finished. For example, a
 context could be the engineering division in a company, so it is easy
-to retrieve all engineering tasks. Contexts are also heirarchical, so
+to retrieve all engineering tasks. Contexts are also hierarchical, so
 the engineering division could be a subcontext of the company. A
 similar system could be created with tags, but tag management is
 complicated, and forcing a context on task automatically categorizes
