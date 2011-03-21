@@ -31,6 +31,22 @@ indexes:
   ancestor: yes
   properties:
   - name: completed
+  - name: parent_task
+  - name: time
+    direction: desc
+
+- kind: Task
+  ancestor: yes
+  properties:
+  - name: completed
+  - name: time
+    direction: desc
+
+- kind: Task
+  ancestor: yes
+  properties:
+  - name: parent_task
+  - name: completed
   - name: time
     direction: desc
 

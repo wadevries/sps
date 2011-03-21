@@ -67,6 +67,10 @@ class User(db.Model):
     # The default context for new tasks for this user
     default_context = db.ReferenceProperty(reference_class=Context)
 
+    def identifier(self):
+        """Returns a string identifier for this user"""
+        return self.key().name()
+
     def default_context_key(self):
         """
         Returns the key of the |default_context| without dereferencing
@@ -102,7 +106,7 @@ class Task(db.Model):
     # Link to a parent task. Tasks that do not have a parent are all
     # considered to be in the 'backlog'.
     parent_task = db.SelfReferenceProperty(default=None,
-                                           collection_name="sub_tasks")
+                                           collection_name="subtasks")
 
     # TODO(tijmen): Add statuses
 
@@ -129,6 +133,13 @@ class Task(db.Model):
     duration = db.TimeProperty()
     # Time of creation of the task. Just for reference.
     time = db.DateTimeProperty(auto_now_add=True)
+    # Explicit tracking of the number of subtasks of this task. If
+    # the count is 0, then this Task is an atomatic task.
+    number_of_subtasks = db.IntegerProperty(default=0)
+
+    def identifier(self):
+        """Returns a string with the task identifier"""
+        return str(self.key().id_or_name())
 
     def title(self):
         """Returns the title of the task.
@@ -143,7 +154,22 @@ class Task(db.Model):
         return Task.user.get_value_for_datastore(self)
 
     def assignee_key(self):
-        """Returns the key of the |assignee| without dereferencing the
-        property.
+        """
+        Returns the key of the |assignee| without dereferencing the property.
         """
         return Task.assignee.get_value_for_datastore(self)
+
+    def atomic(self):
+        """Returns true if this task is an atomic task"""
+        return self.number_of_subtasks > 0
+
+    def invariant(self):
+        """
+        Checks the task state. Returns False if the task state is incorrect.
+
+        Potentially slow function, do not call in production code.
+        """
+        subtask_count = self.subtasks.ancestor(self.parent_key()).count()
+        if subtask_count != self.number_of_subtasks:
+            return False
+        return True

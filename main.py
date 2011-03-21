@@ -61,7 +61,28 @@ def get_and_validate_user(domain_key_name):
 
 def assignee_description(task):
     """Returns a string describing the assignee of a task"""
-    return (task.assignee.name if task.assignee else "&#60not assigned&#62")
+    return (task.assignee.name if task.assignee else "<not assigned>")
+
+
+def _task_template_values(tasks, user):
+    """
+    Returns a list of dictionaries containing the template values for
+    each task.
+
+    Args:
+        tasks: A list of Task model instance
+        user: A User model instance
+
+    Returns a list of dictionaries for each task, in the same order.
+    """
+    return [{ 'title': task.title(),
+              'completed': task.completed,
+              'is_assigned': task.assignee_key() != None,
+              'assignee_description': assignee_description(task),
+              'can_complete': task.assignee_key() == user.key(),
+              'num_subtasks': task.number_of_subtasks,
+              'id': task.identifier() }
+            for task in tasks]
 
 
 class Landing(webapp.RequestHandler):
@@ -105,23 +126,13 @@ class DomainOverview(webapp.RequestHandler):
         all_tasks = api.get_all_tasks(domain_identifier)
         domain = Domain.get_by_key_name(domain_identifier)
         template_values = {
-            'domain': domain_identifier,
             'domain_name': domain.name,
-            'username': user.name,
-            'user_key_name': user.key().name(),
-            'all_tasks': [{ 'title': task.title(),
-                            'completed': task.completed,
-                            'assignee': assignee_description(task),
-                            'user': task.user,
-                            'id': task.key().id_or_name() }
-                          for task in all_tasks],
-            'your_tasks': [{ 'title': task.title(),
-                             'completed': task.completed,
-                             'id': task.key().id_or_name() }
-                           for task in your_tasks],
-            'open_tasks': [{ 'title': task.title(),
-                             'id': task.key().id_or_name() }
-                           for task in open_tasks],
+            'domain_identifier': domain_identifier,
+            'user_name': user.name,
+            'user_identifier': user.identifier(),
+            'all_tasks': _task_template_values(all_tasks, user),
+            'your_tasks': _task_template_values(your_tasks, user),
+            'open_tasks': _task_template_values(open_tasks, user)
             }
         path = os.path.join(os.path.dirname(__file__),
                             'templates/overview.html')
@@ -139,11 +150,21 @@ class TaskDetail(webapp.RequestHandler):
             return
         user = get_user()
         domain = Domain.get_by_key_name(domain_identifier)
+        subtasks = api.get_all_subtasks(domain_identifier, task)
+        parent_task = task.parent_task
+        parent_identifier = parent_task.identifier() if parent_task else ""
+        parent_title = parent_task.title() if parent_task else ""
         template_values = {
             'domain_name': domain.name,
-            'username': user.name,
+            'domain_identifier': domain_identifier,
+            'user_name': user.name,
+            'user_identifier': user.identifier(),
             'task_description': task.description,
             'task_assignee': assignee_description(task),
+            'task_identifier':task.identifier(),
+            'subtasks': _task_template_values(subtasks, user),
+            'parent_identifier': parent_identifier,
+            'parent_title': parent_title,
             }
         path = os.path.join(os.path.dirname(__file__),
                             'templates/taskdetail.html')
@@ -158,6 +179,7 @@ class CreateTask(webapp.RequestHandler):
         try:
             domain = self.request.get('domain')
             description = self.request.get('description')
+            parent_identifier = self.request.get('parent', "")
             if not description:
                 raise ValueError("Empty description")
             # The checkbox will return 'on' if checked and None
@@ -171,7 +193,13 @@ class CreateTask(webapp.RequestHandler):
             self.error(401)
             return
         assignee = user if self_assign else None
-        api.create_task(domain, user, description, assignee=assignee)
+        if not parent_identifier:
+            parent_identifier = None
+        api.create_task(domain,
+                        user,
+                        description,
+                        assignee=assignee,
+                        parent_task=parent_identifier)
         self.response.out.write("Task created")
 
 

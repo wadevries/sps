@@ -64,11 +64,13 @@ def get_task(domain, task):
         return Task.get_by_name(task, parent=domain_key)
 
 
-def create_task(domain, user, description, assignee=None):
+def create_task(domain, user, description, assignee=None, parent_task=None):
     """Create and store a task in the Datastore.
 
-    The task will be stored in the specified domain. The user
-    must be a member of the domain to create the task.
+    The task will be stored in the specified domain. The user must be
+    a member of the domain to create the task. If a |parent_task| is
+    specified, the new task will be added as subtask of that task. All
+    tasks in the task hierarchy will also be updated.
 
     Args:
         domain: The key name of the domain in which the task is created.
@@ -77,26 +79,41 @@ def create_task(domain, user, description, assignee=None):
         assignee: The user model instance of the user to whom this task is
             assigned. The assignee must be in the same domain as the user.
             A value of None indicates no assignee for this task.
+        parent_task: The task identifier of the optional parent task.
 
     Returns:
-        The model instance of the created task.
+        The model instance of the newly created task.
 
     Raises:
         ValueError: The |assignee| and |user| domain do not match or
             the user is not a member of domain.
+        ValueError: The parent task does not exist.
     """
     if not member_of_domain(domain, user):
         raise ValueError("User '%s' not a member of domain '%s'" %
                          (user.name, domain))
     if assignee and not member_of_domain(domain, user, assignee):
         raise ValueError("Assignee and user domain do not match")
-    task = Task(parent=Domain.key_from_name(domain),
-                description=description,
-                user=user,
-                assignee=assignee,
-                context=user.default_context_key())
-    task.put()
-    return task
+
+    def txn():
+        super_task = None
+        if parent_task:
+            super_task = get_task(domain, parent_task)
+            if not super_task:
+                raise ValueError("Parent task does not exist")
+        task = Task(parent=Domain.key_from_name(domain),
+                    description=description,
+                    user=user,
+                    assignee=assignee,
+                    context=user.default_context_key(),
+                    parent_task=super_task)
+        if super_task:
+            super_task.number_of_subtasks = super_task.number_of_subtasks + 1
+            super_task.put()
+        task.put()
+        return task
+
+    return db.run_in_transaction(txn)
 
 
 def assign_task(domain, user, task, assignee):
@@ -214,6 +231,25 @@ def create_domain(domain, domain_title, user):
         txn_user.put()
     db.run_in_transaction(txn, user.key())
     return new_domain
+
+
+def get_all_subtasks(domain, task):
+    """
+    Returns a list of all subtasks of the given task.
+
+    Args:
+        domain: The domain identifier string
+        task: An instance of the Task model.
+
+    Returns:
+        A list with all subtasks of the given task, ordered on
+        completion state and time. If no subtasks exist, returns
+        an empty list. Returns at most 50 results.
+    """
+    query = task.subtasks.ancestor(Domain.key_from_name(domain)).\
+        order("completed").\
+        order('-time')
+    return query.fetch(50)
 
 
 def get_all_open_tasks(domain):
