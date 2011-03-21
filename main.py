@@ -132,7 +132,7 @@ class Landing(webapp.RequestHandler):
                           wsgiref_headers=self.response.headers)
         template_values = {
             'username' : user.name,
-            'domains' : [{ 'identifier': domain.key().name(),
+            'domains' : [{ 'identifier': domain.identifier(),
                            'name': domain.name }
                          for domain in domains],
             'messages': get_and_delete_messages(session),
@@ -162,7 +162,7 @@ class DomainOverview(webapp.RequestHandler):
             'domain_name': domain.name,
             'domain_identifier': domain_identifier,
             'username': user.name,
-            'user_key_name': user.key().name(),
+            'user_identifier': user.identifier(),
             'messages': get_and_delete_messages(session),
             'all_tasks': _task_template_values(all_tasks, user),
             'your_tasks': _task_template_values(your_tasks, user),

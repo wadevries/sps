@@ -32,6 +32,10 @@ class Domain(db.Model):
     # default, others have to be added later
     admins = db.ListProperty(str, default=[])
 
+    def identifier(self):
+        """Returns a string identifier for this domain."""
+        return self.key().name()
+
     @staticmethod
     def key_from_name(domain_identifier):
         return db.Key.from_path('Domain', domain_identifier)
