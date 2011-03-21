@@ -1,1 +1,1 @@
-<td class="task-title">{{ task.title|escape }} <a href="/d/{{ domain_identifier }}/task/{{ task.id }}">(details{% if task.num_subtasks %} , {{ task.num_subtasks }} subtasks {% endif %})</a></td>
+<td class="task-title"><a href="/d/{{ domain_identifier }}/task/{{ task.id }}">{{ task.title|escape }} {% if task.num_subtasks %}({{ task.num_subtasks }} subtask{{ task.num_subtasks|pluralize }}){% endif %}</a></td>

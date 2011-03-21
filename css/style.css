@@ -9,3 +9,11 @@ td.task-title { width: 600px; }
 td.assign-button { width: 140px; }
 
 td.assignee { width: 140px; }
+
+td.task-title a {
+  text-decoration: none;
+  color: inherit;
+}
+td.task-title a:hover {
+  text-decoration: underline;
+}
