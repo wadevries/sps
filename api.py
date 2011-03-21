@@ -217,12 +217,10 @@ def set_task_completed(domain, user, task_identifier, completed):
             propagate = False
             if completed:
                 parent_task.decrement_incomplete_subtasks()
-                parent_task.put()
                 propagate = parent_task.completed
             else:              # Task went from complete to incomplete
                 parent_completed = parent_task.completed
                 parent_task.increment_incomplete_subtasks()
-                parent_task.put()
                 propagate = parent_task.completed ^ parent_completed
             parent_task.put()
             parent_task = parent_task.parent_task if propagate else None
