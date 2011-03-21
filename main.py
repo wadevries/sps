@@ -173,6 +173,7 @@ class CreateTask(webapp.RequestHandler):
         assignee = user if self_assign else None
         api.create_task(domain, user, description, assignee=assignee)
         self.response.out.write("Task created")
+        self.redirect('/d/%s/' % domain)
 
 
 class TaskComplete(webapp.RequestHandler):
@@ -225,6 +226,7 @@ class AssignTask(webapp.RequestHandler):
         api.assign_task(domain, user, task, assignee)
         self.response.out.write("Task '%s' assigned to '%s'" %
                                 (task.title(), assignee.name))
+        self.redirect('/d/%s/' % domain)
 
 
 class CreateDomain(webapp.RequestHandler):
@@ -243,6 +245,7 @@ class CreateDomain(webapp.RequestHandler):
             self.response.out.write("Could not create domain")
             return
         self.response.out.write("Created domain '%s'" % domain.key().name())
+        self.redirect('/d/%s/' % domain.key().name())
 
 
 _VALID_DOMAIN_KEY_NAME = '[a-z][a-z0-9-]{1,100}'
