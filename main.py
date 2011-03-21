@@ -240,7 +240,10 @@ class CreateTask(webapp.RequestHandler):
                                assignee=assignee,
                                parent_task=parent_identifier)
         add_message(self.session, "Task '%s' created" % task.title())
-        self.redirect('/d/%s/' % domain)
+        if parent_identifier:
+            self.redirect('/d/%s/task/%s' % (domain, parent_identifier))
+        else:
+            self.redirect('/d/%s/' % domain)
 
 
 class TaskComplete(webapp.RequestHandler):
