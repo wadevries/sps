@@ -32,7 +32,7 @@ Assigned to {{ task_assignee|escape }}
   <tr>
     <td class="checkbox">
       <form><input type="checkbox" value="{{ task.id }}" {% if task.completed %}checked{% endif %} {% if not task.can_complete %} disabled {% endif %}></form></td>
-    <td class="task-title">{{ task.title|escape }} <a href="/d/{{ domain_identifier }}/task/{{ task.id }}">(details)</td>
+    {% include 'task-title-column.html' %}
     {% if task.is_assigned %}
     <td class="assignee">{{ task.assignee_description|escape }}</td>
     {% else %}
