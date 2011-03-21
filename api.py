@@ -106,7 +106,8 @@ def create_task(domain, user, description, assignee=None, parent_task=None):
                     user=user,
                     assignee=assignee,
                     context=user.default_context_key(),
-                    parent_task=super_task)
+                    parent_task=super_task,
+                    level=super_task.level + 1 if super_task else 0)
         if super_task:
             super_task.number_of_subtasks = super_task.number_of_subtasks + 1
             super_task.put()

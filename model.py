@@ -38,7 +38,7 @@ class Domain(db.Model):
 
 class Context(db.Model):
     """
-    A context is a second heirarchy structure that serves as a
+    A context is a second hierarchy structure that serves as a
     'container' for tasks. Contexts are mostly used to designate
     owners/groups that have to finish a certain set of tasks.
     """
@@ -81,7 +81,7 @@ class User(db.Model):
 
 class Task(db.Model):
     """
-    A record for every task. Tasks can form a heirarchy. Tasks have
+    A record for every task. Tasks can form a hierarchy. Tasks have
     single description. The title of a tasks is defined as the first
     line of this description.
 
@@ -90,7 +90,7 @@ class Task(db.Model):
     for updating (moving tasks etc) and traversing the data. As tasks
     are all linked through references, a transaction must be used to
     get a consistent view on the data traversing through the
-    heirarchy/graph. Using an entity group in this way does limit the
+    hierarchy/graph. Using an entity group in this way does limit the
     writes to about 1/sec across the entire system, but in practice
     that should not pose a problem as the application is read
     dominated.
@@ -98,9 +98,9 @@ class Task(db.Model):
     Tasks do not have a specific keyname, but use the auto-generated
     numeric ids.
 
-    The heirarchy features in appengine for keys are not used to store
-    the heirachy of tasks, as it is very likely that the task
-    heirarchy changes.
+    The hierarchy features in appengine for keys are not used to store
+    the hierachy of tasks, as it is very likely that the task
+    hierarchy changes.
     """
     description = db.TextProperty(required=True)
     # Link to a parent task. Tasks that do not have a parent are all
@@ -136,6 +136,9 @@ class Task(db.Model):
     # Explicit tracking of the number of subtasks of this task. If
     # the count is 0, then this Task is an atomatic task.
     number_of_subtasks = db.IntegerProperty(default=0)
+    # Level of this task in hierarchy. A task without a parent task
+    # has level 0.
+    level = db.IntegerProperty(default=0)
 
     def identifier(self):
         """Returns a string with the task identifier"""
