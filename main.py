@@ -18,11 +18,38 @@ from google.appengine.ext.webapp import template
 from google.appengine.ext.webapp.util import run_wsgi_app
 from google.appengine.ext import db
 from google.appengine.api import users
+from appengine_utilities.sessions import Session
+
 import logging
 
 from model import Task, Context, Domain, User
 import api
 
+def add_message(session, message):
+    """Adds a message to the current user's session.
+
+    Args:
+        session: a Session object, initialized with the request
+        message: a string message
+
+    The message is stored in the session, so it can be read in a later request.
+    """
+    if 'messages' not in session:
+        session['messages'] = []
+    session['messages'] = session['messages'] + [message]
+
+def get_and_delete_messages(session):
+    """Retrieves all messages in the current user's session, and clears them.
+
+    Args:
+        session: a Session object, initialized with the request
+
+    Returns:
+        A list of messages (strings)
+    """
+    messages = session.setdefault('messages', default=[])
+    del session['messages']
+    return messages
 
 def get_user():
     """Gets the currently logged in user.
@@ -96,6 +123,7 @@ class DomainOverview(webapp.RequestHandler):
     shows all tasks for a user and all the available tasks.
     """
     def get(self, domain_identifier):
+        session = Session(writer='cookie', wsgiref_headers=self.response.headers)
         user = get_and_validate_user(domain_identifier)
         if not user:
             self.error(404)
@@ -109,6 +137,7 @@ class DomainOverview(webapp.RequestHandler):
             'domain_name': domain.name,
             'username': user.name,
             'user_key_name': user.key().name(),
+            'messages': get_and_delete_messages(session),
             'all_tasks': [{ 'title': task.title(),
                             'completed': task.completed,
                             'assignee': assignee_description(task),
@@ -170,9 +199,10 @@ class CreateTask(webapp.RequestHandler):
         if not user:
             self.error(401)
             return
+        self.session = Session(writer='cookie', wsgiref_headers=self.response.headers)
         assignee = user if self_assign else None
         api.create_task(domain, user, description, assignee=assignee)
-        self.response.out.write("Task created")
+        add_message(self.session, "Task created")
         self.redirect('/d/%s/' % domain)
 
 
