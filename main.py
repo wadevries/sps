@@ -79,7 +79,7 @@ def _task_template_values(tasks, user):
               'completed': task.completed,
               'is_assigned': task.assignee_key() != None,
               'assignee_description': assignee_description(task),
-              'can_complete': task.assignee_key() == user.key(),
+              'can_complete': api.can_complete_task(task, user),
               'num_subtasks': task.number_of_subtasks,
               'id': task.identifier() }
             for task in tasks]

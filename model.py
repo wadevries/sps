@@ -136,6 +136,8 @@ class Task(db.Model):
     # Explicit tracking of the number of subtasks of this task. If
     # the count is 0, then this Task is an atomatic task.
     number_of_subtasks = db.IntegerProperty(default=0)
+    # Tracking of the number of incomplete subtasks.
+    remaining_subtasks = db.IntegerProperty(default=0, indexed=False)
     # Level of this task in hierarchy. A task without a parent task
     # has level 0.
     level = db.IntegerProperty(default=0)
@@ -162,9 +164,27 @@ class Task(db.Model):
         """
         return Task.assignee.get_value_for_datastore(self)
 
+    def increment_incomplete_subtasks(self):
+        """
+        Increments the incompleted subtasks count and sets the completed
+        flag to False.
+        """
+        self.remaining_subtasks = self.remaining_subtasks + 1
+        self.completed = False
+
+    def decrement_incomplete_subtasks(self):
+        """
+        Decrements the number of incompleted subtasks by one. If this value
+        reaches 0, then the completed flag will be set to True.
+        """
+        assert self.remaining_subtasks > 0
+        self.remaining_subtasks = self.remaining_subtasks - 1
+        if not self.remaining_subtasks:
+            self.completed = True
+
     def atomic(self):
         """Returns true if this task is an atomic task"""
-        return self.number_of_subtasks > 0
+        return self.number_of_subtasks == 0
 
     def invariant(self):
         """
@@ -174,5 +194,7 @@ class Task(db.Model):
         """
         subtask_count = self.subtasks.ancestor(self.parent_key()).count()
         if subtask_count != self.number_of_subtasks:
+            return False
+        if completed and number_of_incomplete_subtasks != 0:
             return False
         return True

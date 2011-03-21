@@ -64,6 +64,23 @@ def get_task(domain, task):
         return Task.get_by_name(task, parent=domain_key)
 
 
+def can_complete_task(task, user):
+    """Returns true if the task can be completed by the user.
+
+    Task can only be completed if the user is the assignee and
+    the task is an atomic task. Composite tasks are automatically
+    completed when all its subtasks are completed.
+
+    Args:
+        task: An instance of the Task model
+        user: An instance of the User model
+
+    Returns:
+        True if the user can set the task to completed.
+    """
+    return task.atomic() and task.assignee_key() == user.key()
+
+
 def create_task(domain, user, description, assignee=None, parent_task=None):
     """Create and store a task in the Datastore.
 
@@ -110,6 +127,7 @@ def create_task(domain, user, description, assignee=None, parent_task=None):
                     level=super_task.level + 1 if super_task else 0)
         if super_task:
             super_task.number_of_subtasks = super_task.number_of_subtasks + 1
+            super_task.increment_incomplete_subtasks()
             super_task.put()
         task.put()
         return task
@@ -163,17 +181,17 @@ def assign_task(domain, user, task, assignee):
     return task
 
 
-def set_task_completed(domain, user, task, completed):
+def set_task_completed(domain, user, task_identifier, completed):
     """Sets the completion status of a task.
 
     A task can only be set to completed if |user| is the assignee of
-    task, or an admin. The updated task will be stored in the
-    datstore.
+    the task and if the task is an atomic task. This function will
+    also propagate the complete status up the task hierarchy.
 
     Args:
         domain: The domain identifier string
         user: An instance of the User model
-        task: The task id or key name
+        task: The task identifier
         completed: The new value of the completed property of the task
 
     Returns:
@@ -184,14 +202,33 @@ def set_task_completed(domain, user, task, completed):
         ValueError: The task does not exist or the user is not the
             assignee of the task.
     """
-    task_instance = get_task(domain, task)
-    if (not task_instance or
-        not task_instance.assignee_key() == user.key()):
-        raise ValueError("Invalid task or user rights")
-    import logging
-    task_instance.completed = completed
-    task_instance.put()
-    return task
+    def txn():
+        task = get_task(domain, task_identifier)
+        if (not task or not task.atomic() or not can_complete_task(task, user)):
+            raise ValueError("Invalid task")
+
+        if not task.completed ^ completed:
+            return task # no changes
+
+        task.completed = completed
+        task.put()
+        parent_task = task.parent_task
+        while parent_task:
+            propagate = False
+            if completed:
+                parent_task.decrement_incomplete_subtasks()
+                parent_task.put()
+                propagate = parent_task.completed
+            else:              # Task went from complete to incomplete
+                parent_completed = parent_task.completed
+                parent_task.increment_incomplete_subtasks()
+                parent_task.put()
+                propagate = parent_task.completed ^ parent_completed
+            parent_task.put()
+            parent_task = parent_task.parent_task if propagate else None
+        return task
+
+    return db.run_in_transaction(txn)
 
 
 def create_domain(domain, domain_title, user):

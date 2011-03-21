@@ -34,7 +34,7 @@ title of the task.
     {% for task in your_tasks %}
     <tr>
       <td class="checkbox">
-	<input type="checkbox" name="completed" value="{{ task.id }}" {% if task.completed %} checked {% endif %}>
+	{% include 'task-complete-checkbox.html' %}
       </td>
       {% include 'task-title-column.html' %}
     </tr>
