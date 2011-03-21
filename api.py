@@ -20,6 +20,7 @@ be pretty straightforward.
 """
 import re
 from google.appengine.ext import db
+from google.appengine.api import users
 from model import Domain, Task, Context, User
 
 
@@ -45,6 +46,77 @@ def member_of_domain(domain, user, *args):
     return True
 
 
+def get_user():
+    """Gets the currently logged in user.
+
+    The login is based on the GAE user system, but Users are stored as
+    separate entities. If the user does not have an entity, one will
+    be created using the information in his Google account.
+
+    Returns:
+        An instance of the User model, or None if the user is not
+        logged in.
+    """
+    guser = users.get_current_user()
+    if not guser:
+        return None
+    user = User.get_by_key_name(guser.user_id())
+    if not user:
+        user = User(key_name=guser.user_id(), name=guser.nickname())
+        user.put()
+    return user
+
+
+def get_and_validate_user(domain_identifier):
+    """Gets the currently logged in user and validates if he
+    is a member of the domain.
+
+    If the user is not logged in, or is not a member of the domain
+    with |domain_identifier|, then None will be returned.
+
+    Args:
+        domain_identifier: The domain identifier string.
+
+    Returns:
+        An instance of the User model, or None if the user
+        is not logged in or not a member of the domain.
+    """
+    user = get_user()
+    if not user or not member_of_domain(domain_identifier, user):
+        return None
+    return user
+
+
+def get_domain(domain_identifier):
+    """
+    Returns the Domain model instance corresponding to the identifier.
+
+    Args:
+        domain_identifier: The domain identifier string
+
+    Returns:
+        An instance of the Domain model, or None if no domain exist
+        with the given identifier.
+    """
+    return Domain.get_by_key_name(domain_identifier)
+
+
+def get_all_domains_for_user(user):
+    """
+    Returns a list with domain instances of the domains that
+    the given user is a member of.
+
+    Args:
+        user: An instance of the User model
+
+    Returns:
+        A list of Domain model instances.
+    """
+    keys = [db.Key.from_path('Domain', domain)
+            for domain in user.domains]
+    return Domain.get(keys)
+
+
 def get_task(domain, task):
     """Gets a task in a domain.
 
@@ -61,7 +133,7 @@ def get_task(domain, task):
         task_id = int(task)
         return Task.get_by_id(task_id, parent=domain_key)
     except ValueError:
-        return Task.get_by_name(task, parent=domain_key)
+        return Task.get_by_key_name(task, parent=domain_key)
 
 
 def can_complete_task(task, user):

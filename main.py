@@ -18,7 +18,6 @@ from google.appengine.ext import webapp
 from google.appengine.ext.webapp import template
 from google.appengine.ext.webapp.util import run_wsgi_app
 from google.appengine.ext import db
-from google.appengine.api import users
 from appengine_utilities.sessions import Session
 
 from model import Task, Context, Domain, User
@@ -52,40 +51,6 @@ def get_and_delete_messages(session):
     return messages
 
 
-def get_user():
-    """Gets the currently logged in user.
-
-    The login is based on the GAE user system.
-
-    Returns:
-        An instance of the User model, or None if no user exists or
-        is not logged in.
-    """
-    guser = users.get_current_user()
-    if not guser:
-        return None
-    return User.get_by_key_name(guser.user_id())
-
-
-def get_and_validate_user(domain_key_name):
-    """Gets the currently logged in user and validates if he
-    is a member of the domain.
-
-    If the user is not logged in, or is not a member of the domain
-    with |domain_key_name|, then None will be returned.
-
-    Args:
-        domain_key_name: The key name of the domain.
-
-    Returns:
-        An instance of the User model, or None if the user
-        is not logged in or not a member of the domain.
-    """
-    user = get_user()
-    if not user or not api.member_of_domain(domain_key_name, user):
-        return None
-    return user
-
 
 def assignee_description(task):
     """Returns a string describing the assignee of a task"""
@@ -118,16 +83,8 @@ class Landing(webapp.RequestHandler):
     The main landing page. Shows the users domains and links to them.
     """
     def get(self):
-        user = get_user()
-        if not user:
-            guser = users.get_current_user()
-            user = User(key_name=guser.user_id(),
-                        name=guser.nickname())
-            user.put()
-
-        keys = [db.Key.from_path('Domain', domain)
-                for domain in user.domains]
-        domains = Domain.get(keys)
+        user = api.get_user()
+        domains = api.get_all_domains_for_user(user)
         session = Session(writer='cookie',
                           wsgiref_headers=self.response.headers)
         template_values = {
@@ -150,14 +107,14 @@ class DomainOverview(webapp.RequestHandler):
     def get(self, domain_identifier):
         session = Session(writer='cookie',
                           wsgiref_headers=self.response.headers)
-        user = get_and_validate_user(domain_identifier)
+        user = api.get_and_validate_user(domain_identifier)
         if not user:
             self.error(404)
             return
         your_tasks = api.get_all_assigned_tasks(domain_identifier, user)
         open_tasks = api.get_all_open_tasks(domain_identifier)
         all_tasks = api.get_all_tasks(domain_identifier)
-        domain = Domain.get_by_key_name(domain_identifier)
+        domain = api.get_domain(domain_identifier)
         template_values = {
             'domain_name': domain.name,
             'domain_identifier': domain_identifier,
@@ -182,10 +139,10 @@ class TaskDetail(webapp.RequestHandler):
         if not task:
             self.error(404)
             return
-        user = get_user()
-        domain = Domain.get_by_key_name(domain_identifier)
         session = Session(writer='cookie',
                           wsgiref_headers=self.response.headers)
+        user = api.get_user()
+        domain = api.get_domain(domain_identifier)
         subtasks = api.get_all_subtasks(domain_identifier, task)
         parent_task = task.parent_task
         parent_identifier = parent_task.identifier() if parent_task else ""
@@ -225,7 +182,7 @@ class CreateTask(webapp.RequestHandler):
         except (TypeError, ValueError):
             self.error(400)
             return
-        user = get_and_validate_user(domain)
+        user = api.get_and_validate_user(domain)
         if not user:
             self.error(401)
             return
@@ -261,7 +218,7 @@ class TaskComplete(webapp.RequestHandler):
         except (TypeError, ValueError):
             self.error(400)
             return
-        user = get_and_validate_user(domain)
+        user = api.get_and_validate_user(domain)
         if not user:
             self.error(403)
             return
@@ -283,11 +240,11 @@ class AssignTask(webapp.RequestHandler):
             self.error(403)
             logging.error("Invalid input")
             return
-        user = get_and_validate_user(domain)
+        user = api.get_and_validate_user(domain)
         if not user:
             self.error(403)
             return
-        task = Task.get_by_id(task_id, parent=Domain.key_from_name(domain))
+        task = api.get_task(domain, task_id)
         assignee = User.get_by_key_name(assignee)
         if not task or not assignee:
             self.error(403)
@@ -311,7 +268,7 @@ class CreateDomain(webapp.RequestHandler):
         except (TypeError, ValueError):
             self.error(403)
             return
-        user = get_user()
+        user = api.get_user()
         domain = api.create_domain(domain_id, title, user)
         if not domain:
             self.response.out.write("Could not create domain")
@@ -333,7 +290,7 @@ class CreateDomain(webapp.RequestHandler):
         except (TypeError, ValueError):
             self.error(403)
             return
-        user = get_user()
+        user = api.get_user()
         domain = api.create_domain(domain_id, title, user)
         if not domain:
             self.response.out.write("Could not create domain")

@@ -32,13 +32,21 @@ class Domain(db.Model):
     # default, others have to be added later
     admins = db.ListProperty(str, default=[])
 
+    @staticmethod
+    def key_from_name(domain_identifier):
+        """
+        Returns the datastore key of the domain entity with the given
+        identifier. It is not checked if the entity actually exists.
+
+        Returns:
+            An instance of db.Key pointing to a Domain entity.
+        """
+        return db.Key.from_path('Domain', domain_identifier)
+
     def identifier(self):
         """Returns a string identifier for this domain."""
         return self.key().name()
 
-    @staticmethod
-    def key_from_name(domain_identifier):
-        return db.Key.from_path('Domain', domain_identifier)
 
 class Context(db.Model):
     """
