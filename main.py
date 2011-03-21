@@ -180,7 +180,7 @@ class TaskDetail(webapp.RequestHandler):
     def get(self, domain_identifier, task_identifier):
         task = api.get_task(domain_identifier, task_identifier)
         if not task:
-            error(404)
+            self.error(404)
             return
         user = get_user()
         domain = Domain.get_by_key_name(domain_identifier)
