@@ -201,8 +201,8 @@ class CreateTask(webapp.RequestHandler):
             return
         self.session = Session(writer='cookie', wsgiref_headers=self.response.headers)
         assignee = user if self_assign else None
-        api.create_task(domain, user, description, assignee=assignee)
-        add_message(self.session, "Task created")
+        task = api.create_task(domain, user, description, assignee=assignee)
+        add_message(self.session, "Task '%s' created" % task.title())
         self.redirect('/d/%s/' % domain)
 
 

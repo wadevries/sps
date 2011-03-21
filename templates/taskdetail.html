@@ -18,6 +18,14 @@
 logged in as: <b> {{ username }} </b>
 <hr>
 
+{% if messages %}
+<ul>
+{% for message in messages %}
+<li>{{ message }}</li>
+{% endfor %}
+</ul>
+{% endif %}
+
 <h3>Task Description</h3>
 
 <textarea disabled>{{ task_description }}</textarea><br>
