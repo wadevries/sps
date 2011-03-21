@@ -106,11 +106,14 @@ class Landing(webapp.RequestHandler):
         keys = [db.Key.from_path('Domain', domain)
                 for domain in user.domains]
         domains = Domain.get(keys)
+        session = Session(writer='cookie',
+                          wsgiref_headers=self.response.headers)
         template_values = {
             'username' : user.name,
             'domains' : [{ 'identifier': domain.key().name(),
                            'name': domain.name }
                          for domain in domains],
+            'messages': get_and_delete_messages(session),
             }
         path = os.path.join(os.path.dirname(__file__),
                         'templates/landing.html')
@@ -123,7 +126,8 @@ class DomainOverview(webapp.RequestHandler):
     shows all tasks for a user and all the available tasks.
     """
     def get(self, domain_identifier):
-        session = Session(writer='cookie', wsgiref_headers=self.response.headers)
+        session = Session(writer='cookie',
+                          wsgiref_headers=self.response.headers)
         user = get_and_validate_user(domain_identifier)
         if not user:
             self.error(404)
@@ -168,9 +172,12 @@ class TaskDetail(webapp.RequestHandler):
             return
         user = get_user()
         domain = Domain.get_by_key_name(domain_identifier)
+        session = Session(writer='cookie',
+                          wsgiref_headers=self.response.headers)
         template_values = {
             'domain_name': domain.name,
             'username': user.name,
+            'messages': get_and_delete_messages(session),
             'task_description': task.description,
             'task_assignee': assignee_description(task),
             }
@@ -199,7 +206,8 @@ class CreateTask(webapp.RequestHandler):
         if not user:
             self.error(401)
             return
-        self.session = Session(writer='cookie', wsgiref_headers=self.response.headers)
+        self.session = Session(writer='cookie',
+                               wsgiref_headers=self.response.headers)
         assignee = user if self_assign else None
         task = api.create_task(domain, user, description, assignee=assignee)
         add_message(self.session, "Task '%s' created" % task.title())
@@ -254,7 +262,9 @@ class AssignTask(webapp.RequestHandler):
             logging.error("No task or assignee")
             return
         api.assign_task(domain, user, task, assignee)
-        self.response.out.write("Task '%s' assigned to '%s'" %
+        session = Session(writer='cookie',
+                          wsgiref_headers=self.response.headers)
+        add_message(session, "Task '%s' assigned to '%s'" %
                                 (task.title(), assignee.name))
         self.redirect('/d/%s/' % domain)
 
@@ -274,7 +284,9 @@ class CreateDomain(webapp.RequestHandler):
         if not domain:
             self.response.out.write("Could not create domain")
             return
-        self.response.out.write("Created domain '%s'" % domain.key().name())
+        session = Session(writer='cookie',
+                          wsgiref_headers=self.response.headers)
+        add_message(session, "Created domain '%s'" % domain.key().name())
         self.redirect('/d/%s/' % domain.key().name())
 
 
