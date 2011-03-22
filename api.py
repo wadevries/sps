@@ -335,12 +335,11 @@ def create_domain(domain, domain_title, user):
     new_domain.put()
     def txn(user_key):
         txn_user = User.get(user_key)
-        txn_user.domains.append(domain)
-        txn_user.put()
+        if not domain in txn_user.domains:
+            txn_user.domains.append(domain)
+            txn_user.put()
     db.run_in_transaction(txn, user.key())
     return new_domain
-
-
 
 
 def _complete_hierarchy(domain, tasks):
@@ -466,7 +465,6 @@ def get_all_open_tasks(domain):
             order('-time')
         return _complete_hierarchy(domain, query.fetch(50))
     return db.run_in_transaction(txn)
-
 
 
 def get_all_assigned_tasks(domain, user):
