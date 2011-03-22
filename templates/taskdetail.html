@@ -26,18 +26,24 @@ logged in as: <b> {{ user_name|escape }} </b>
 </ul>
 {% endif %}
 
-<h3>Task Description</h3>
+<h3>{{ task_title|escape }}</h3>
 {% if parent_identifier %}
-Subtask of <a href="/d/{{ domain_identifier }}/task/{{ parent_identifier }}">{{ parent_title }}</a><br>
+<p>Subtask of <a href="/d/{{ domain_identifier }}/task/{{ parent_identifier }}">{{ parent_title }}</a></p>
 {% endif %}
-
+{% if task_description %}
+Description:<br>
 <textarea disabled>{{ task_description|escape }}</textarea><br>
-Assigned to {{ task_assignee|escape }}
+{% else %}
+<p>No extra description has been entered for this task.</p>
+{% endif %}
+<p>Assigned to {{ task_assignee|escape }}</p>
 <hr>
 <h3>Subtasks</h3>
 <table>
   {% for task in subtasks %}
   {% include 'task-row.html' %}
+  {% empty %}
+  <p>No subtasks for this task</p>
   {% endfor %}
 </table>
 

@@ -177,6 +177,17 @@ class Task(db.Model):
         """
         return self.description.split('\r\n', 1)[0].split('\n', 1)[0]
 
+    def description_body(self):
+        """
+        Returns the body of the description, the part of the
+        description that does not include the title.
+        """
+        parts = self.description.partition('\r\n')
+        if parts[2]:
+            return parts[2]
+        parts = self.description.partition('\n')
+        return parts[2]
+
     def user_key(self):
         """Returns the key of the |user| without dereferencing the property.
         """

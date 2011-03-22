@@ -13,6 +13,8 @@
 #  limitations under the License.
 
 import os
+from google.appengine.dist import use_library
+use_library('django', '1.2')
 import logging
 from google.appengine.ext import webapp
 from google.appengine.ext.webapp import template
@@ -37,6 +39,7 @@ def add_message(session, message):
         session['messages'] = []
     session['messages'] = session['messages'] + [message]
 
+
 def get_and_delete_messages(session):
     """Retrieves all messages in the current user's session, and clears them.
 
@@ -49,7 +52,6 @@ def get_and_delete_messages(session):
     messages = session.setdefault('messages', default=[])
     del session['messages']
     return messages
-
 
 
 def assignee_description(task):
@@ -154,7 +156,8 @@ class TaskDetail(webapp.RequestHandler):
             'user_name': user.name,
             'user_identifier': user.identifier(),
             'messages': get_and_delete_messages(session),
-            'task_description': task.description,
+            'task_title': task.title(),
+            'task_description': task.description_body(),
             'task_assignee': assignee_description(task),
             'task_identifier':task.identifier(),
             'subtasks': _task_template_values(subtasks, user),
