@@ -1,0 +1,24 @@
+<tr>
+  <td class="checkbox">
+    <form>
+      {% for i in task.levels %}&nbsp;&nbsp;{% endfor %}<input type="checkbox" name="completed" value="{{ task.id }}" {% if task.completed %} checked {% endif %}{% if not task.can_complete %}disabled{% endif %}>
+      </form>
+    </td>
+  <td class="task-title">
+    <a href="/d/{{ domain_identifier }}/task/{{ task.id }}">
+      {{ task.title|escape }} {% if task.num_subtasks %}({{ task.num_subtasks }} subtask{{ task.num_subtasks|pluralize }}){% endif %}
+    </a>
+  </td>
+  {% if task.is_assigned %}
+  <td class="assignee">{{ task.assignee_description|escape }}</td>
+  {% else %}
+  <td class="assign-button">
+    <form action="/assign-task" method="post">
+      <input type="submit" value="Assign to self">
+      <input type="hidden" name="assignee" value="{{ user_identifier }}">
+      <input type="hidden" name="id" value="{{ task.id }}">
+      <input type="hidden" name="domain" value="{{ domain_identifier }}">
+    </form>
+  </td>
+  {% endif %}
+</tr>
