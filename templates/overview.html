@@ -40,12 +40,7 @@ title of the task.
 <form>
   <table>
     {% for task in your_tasks %}
-    <tr>
-      <td class="checkbox">
-	{% include 'task-complete-checkbox.html' %}
-      </td>
-      {% include 'task-title-column.html' %}
-    </tr>
+    {% include 'task-row.html' %}
     {% endfor %}
   </table>
 </form>
@@ -53,31 +48,14 @@ title of the task.
 <h3>Open Tasks</h3>
 <table>
   {% for task in open_tasks %}
-  <tr>
-    <td class="checkbox">
-      <form><input type="checkbox" disabled></form></td>
-    {% include 'task-title-column.html' %}
-    <td class="assign-button">
-      <form action="/assign-task" method="post">
-	<input type="submit" value="Assign to self">
-	<input type="hidden" name="assignee" value="{{ user_identifier }}">
-	<input type="hidden" name="id" value="{{ task.id }}">
-	<input type="hidden" name="domain" value="{{ domain_identifier }}">
-      </form>
-    </td>
-  </tr>
+  {% include 'task-row.html' %}
   {% endfor %}
 </table>
 
 <h3>All Tasks</h3>
 <table>
   {% for task in all_tasks %}
-  <tr>
-    <td class="checkbox">
-      <form><input type="checkbox" {% if task.completed %}checked{% endif %} disabled></form></td>
-    {% include 'task-title-column.html' %}
-    <td class="assignee">{{ task.assignee_description|escape }}</td>
-  </tr>
+  {% include 'task-row.html' %}
   {% endfor %}
 </table>
 

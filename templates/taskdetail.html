@@ -37,23 +37,7 @@ Assigned to {{ task_assignee|escape }}
 <h3>Subtasks</h3>
 <table>
   {% for task in subtasks %}
-  <tr>
-    <td class="checkbox">
-      <form><input type="checkbox" value="{{ task.id }}" {% if task.completed %}checked{% endif %} {% if not task.can_complete %} disabled {% endif %}></form></td>
-    {% include 'task-title-column.html' %}
-    {% if task.is_assigned %}
-    <td class="assignee">{{ task.assignee_description|escape }}</td>
-    {% else %}
-    <td class="assign-button">
-      <form action="/assign-task" method="post">
-	<input type="submit" value="Assign to self">
-	<input type="hidden" name="assignee" value="{{ user_identifier }}">
-	<input type="hidden" name="id" value="{{ task.id }}">
-	<input type="hidden" name="domain" value="{{ domain_identifier }}">
-      </form>
-    </td>
-    {% endif %}
-  </tr>
+  {% include 'task-row.html' %}
   {% endfor %}
 </table>
 

@@ -455,15 +455,18 @@ def get_all_open_tasks(domain):
         domain: The domain identifier string
 
     Returns:
-        A list of Task model instances that are not yet
-        completed and do not have an assignee. The tasks will be ordered
-        by their time, with the oldest tasks first.
+        A list of Task model instances that are not yet completed
+        and do not have an assignee. The tasks will be ordered on
+        hierarchy.
     """
-    query = Task.all().ancestor(Domain.key_from_name(domain)).\
-        filter('completed =', False).\
-        filter('assignee =', None).\
-        order('-time')
-    return query.fetch(50)
+    def txn():
+        query = Task.all().ancestor(Domain.key_from_name(domain)).\
+            filter('completed =', False).\
+            filter('assignee =', None).\
+            order('-time')
+        return _complete_hierarchy(domain, query.fetch(50))
+    return db.run_in_transaction(txn)
+
 
 
 def get_all_assigned_tasks(domain, user):
@@ -497,6 +500,8 @@ def get_all_tasks(domain):
         A list of at most 50 task instances of |domain|, ordered on task
         creation time, with the newest task first.
     """
-    query = Task.all().ancestor(Domain.key_from_name(domain)).\
-        order('-time')
-    return query.fetch(50)
+    def txn():
+        query = Task.all().ancestor(Domain.key_from_name(domain)).\
+            order('-time')
+        return _complete_hierarchy(domain, query.fetch(50))
+    return db.run_in_transaction(txn)

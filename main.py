@@ -69,6 +69,7 @@ def _task_template_values(tasks, user):
     Returns a list of dictionaries for each task, in the same order.
     """
     return [{ 'title': task.title(),
+              'levels': range(task.level),
               'completed': task.completed,
               'is_assigned': task.assignee_key() != None,
               'assignee_description': assignee_description(task),
