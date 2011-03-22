@@ -158,6 +158,18 @@ class Task(db.Model):
         """Returns a string with the task identifier"""
         return str(self.key().id_or_name())
 
+    def parent_task_identifier(self):
+        """
+        Returns a string identifier of the parent task of this
+        task. If the task has no parent task, then None is
+        returned. This function does not fetch from the datastore.
+        """
+        parent_key = self.parent_task_key()
+        if parent_key:
+            return str(parent_key.id_or_name())
+        else:
+            return None
+
     def title(self):
         """Returns the title of the task.
 
@@ -175,6 +187,13 @@ class Task(db.Model):
         Returns the key of the |assignee| without dereferencing the property.
         """
         return Task.assignee.get_value_for_datastore(self)
+
+    def parent_task_key(self):
+        """
+        Returns the key of the |parent_task| without derefercing the
+        property.
+        """
+        return Task.parent_task.get_value_for_datastore(self)
 
     def increment_incomplete_subtasks(self):
         """
@@ -197,6 +216,10 @@ class Task(db.Model):
     def atomic(self):
         """Returns true if this task is an atomic task"""
         return self.number_of_subtasks == 0
+
+    def root(self):
+        """Returns true if this task has no parent task"""
+        return not self.parent_task_key()
 
     def invariant(self):
         """

@@ -341,6 +341,92 @@ def create_domain(domain, domain_title, user):
     return new_domain
 
 
+
+
+def _complete_hierarchy(domain, tasks):
+    """
+    Completes the list of tasks to form a complete hierarchy tree of
+    the tasks and their supertasks.
+
+    The tasks specified can form (a part of) a tree, but it might not
+    be essentially complete; some super tasks might be missing.  This
+    function completes the tree 'upwards' by fetching the remaining
+    supertasks and connecting the tree. It makes no assumptions on the
+    ordering or contents of the input tasks. The function does not
+    complete the tree downwards or on the same level; ie. it does not
+    fetch subtasks.
+
+    The function returns a ordered list of tasks, equivalent to a
+    preorder traversal of the task tree. The order is preserved as
+    much as possible.
+
+    Depending on the contents of tasks, multiple (sequential) requests
+    to the datastore will be made. This function must be called as
+    part of a transaction (!) or the traversal might be broken.
+
+    Args:
+       domain: The domain identifier string
+       tasks: A list of Task model instances
+
+    Returns:
+        A list of Task model instances, which form a complete
+        task hierarchy, ordered through pre-order traversal. The
+        original order will be preserved as much as possible.
+    """
+    # Algorithm works as follows: All taks are grouped in the trees,
+    # following their parent tasks. Missing parent tasks are fetched
+    # from the datastore and added to the trees, all the way up the
+    # heirarchy. All tree roots are stored in a list, in the same
+    # order as the input tasks, so the original order is preserved as
+    # much as possible. To output all roots are traversed pre-order
+    # and then concatenated in a single list.
+
+    # Index of all identifiers to their Task model instances
+    index = dict([(task.identifier(), task) for task in tasks])
+    # Index of all tree nodes, by task
+    trees = {}
+    # The output of the algorithm, all the tree root nodes, in the
+    # same order as the input tasks.
+    roots = []
+
+    class _Tree(object):
+        """Very basic n-tree node"""
+        def __init__(self, value, parent=None):
+            self.value = value
+            self.parent = parent
+            if self.parent:
+                self.parent.children.append(self)
+            self.children = []
+
+        def pre_order(self, output):
+            output.append(self.value)
+            for child in self.children:
+                child.pre_order(output)
+
+    def fetch_tree(task_identifier):
+        task = index.get(task_identifier)
+        if not task:
+            task = get_task(domain, task_identifier)
+            index[task_identifier] = task
+        tree = trees.get(task)
+        if not tree:
+            if task.root():
+                tree = _Tree(task)
+                roots.append(tree)
+            else:
+                parent_tree = fetch_tree(task.parent_task_identifier())
+                tree = _Tree(task, parent=parent_tree)
+            trees[task] = tree
+        return tree
+
+    for task in tasks:
+        fetch_tree(task.identifier())
+    output = []
+    for root in roots:
+        root.pre_order(output)
+    return output
+
+
 def get_all_subtasks(domain, task):
     """
     Returns a list of all subtasks of the given task.
@@ -355,7 +441,7 @@ def get_all_subtasks(domain, task):
         an empty list. Returns at most 50 results.
     """
     query = task.subtasks.ancestor(Domain.key_from_name(domain)).\
-        order("completed").\
+        order('completed').\
         order('-time')
     return query.fetch(50)
 
@@ -393,10 +479,12 @@ def get_all_assigned_tasks(domain, user):
         status, with uncompleted tasks first. A secondary order is on time,
         with newest tasks first.
     """
-    query = user.assigned_tasks.ancestor(Domain.key_from_name(domain)).\
-        order("completed").\
-        order("-time")
-    return query.fetch(50)
+    def txn():
+        query = user.assigned_tasks.ancestor(Domain.key_from_name(domain)).\
+            order('completed').\
+            order('-time')
+        return _complete_hierarchy(domain, query.fetch(50))
+    return db.run_in_transaction(txn)
 
 
 def get_all_tasks(domain):
