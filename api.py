@@ -343,50 +343,40 @@ def create_domain(domain, domain_title, user):
     return new_domain
 
 
-def _complete_hierarchy(domain, tasks):
+def _group_tasks(tasks, complete_hierarchy=False, domain=None):
     """
-    Completes the list of tasks to form a complete hierarchy tree of
-    the tasks and their supertasks.
+    Reorders the list of tasks such that supertasks are listed before
+    their subtasks.
 
-    The tasks specified can form (a part of) a tree, but it might not
-    be essentially complete; some super tasks might be missing.  This
-    function completes the tree 'upwards' by fetching the remaining
-    supertasks and connecting the tree. It makes no assumptions on the
-    ordering or contents of the input tasks. The function does not
-    complete the tree downwards or on the same level; ie. it does not
-    fetch subtasks.
+    The original order is retained as much as possible while still
+    satisfying the above listed constraint.
 
-    The function returns a ordered list of tasks, equivalent to a
-    preorder traversal of the task tree. The order is preserved as
-    much as possible.
-
-    Depending on the contents of tasks, multiple (sequential) requests
-    to the datastore will be made. This function must be called as
-    part of a transaction (!) or the traversal might be broken.
+    If complete_hierarchy is set to true, then tasks are fetched from
+    the datastore are made to fill in the blanks, all the way up the
+    hierarchy. The function must also be run in the same transaction
+    as where the input tasks are fetched to get consistent results.
 
     Args:
-       domain: The domain identifier string
-       tasks: A list of Task model instances
+        tasks: A list of Task model instances
+        complete_hierarchy: If set to True, then the parent tasks will
+            be fetched to complete the hierarchy.
+        domain: The domain identifier string. Required if
+            complete_hierarchy is set to True.
 
     Returns:
-        A list of Task model instances, which form a complete
-        task hierarchy, ordered through pre-order traversal. The
-        original order will be preserved as much as possible.
-    """
-    # Algorithm works as follows: All taks are grouped in the trees,
-    # following their parent tasks. Missing parent tasks are fetched
-    # from the datastore and added to the trees, all the way up the
-    # heirarchy. All tree roots are stored in a list, in the same
-    # order as the input tasks, so the original order is preserved as
-    # much as possible. To output all roots are traversed pre-order
-    # and then concatenated in a single list.
+        A list of Task model instances, ordered such that supertasks are
+        before their subtasks.
 
-    # Index of all identifiers to their Task model instances
+    Raises:
+        ValueError: If complete_hierarchy is enabled but not domain
+            identifier is specified.
+    """
+    if complete_hierarchy and not domain:
+        raise ValueError("Domain identifier is required")
+
     index = dict([(task.identifier(), task) for task in tasks])
-    # Index of all tree nodes, by task
-    trees = {}
-    # The output of the algorithm, all the tree root nodes, in the
-    # same order as the input tasks.
+    trees = {}                  # Index of all tree nodes, by task
+    # The output of the algorithm, all the tree root nodes
     roots = []
 
     class _Tree(object):
@@ -403,20 +393,26 @@ def _complete_hierarchy(domain, tasks):
             for child in self.children:
                 child.pre_order(output)
 
+
     def fetch_tree(task_identifier):
+        if not task_identifier:
+            return None
+
         task = index.get(task_identifier)
-        if not task:
+        if not task and complete_hierarchy:
             task = get_task(domain, task_identifier)
-            index[task_identifier] = task
+            if task:
+                index[task_identifier] = task
+        if not task:
+            return None
+
         tree = trees.get(task)
         if not tree:
-            if task.root():
-                tree = _Tree(task)
+            parent_tree = fetch_tree(task.parent_task_identifier())
+            tree = _Tree(task, parent=parent_tree)
+            if not parent_tree:
                 roots.append(tree)
-            else:
-                parent_tree = fetch_tree(task.parent_task_identifier())
-                tree = _Tree(task, parent=parent_tree)
-            trees[task] = tree
+        trees[task] = tree
         return tree
 
     for task in tasks:
@@ -427,23 +423,55 @@ def _complete_hierarchy(domain, tasks):
     return output
 
 
-def get_all_subtasks(domain, task):
+def get_all_subtasks(domain, task, limit=50, depth_limit=None):
     """
-    Returns a list of all subtasks of the given task.
+    Returns a list of all subtasks of the given task, in the order
+    as a pre-order traversal through the task hierarchy.
+
+    This function will perform one query for each level of the subtask
+    hierarchy.
 
     Args:
-        domain: The domain identifier string
+        domain: The domain identifier string.
         task: An instance of the Task model.
+        limit: The maximum number of subtasks to return.
+        depth_limit: The maximum depth of subtasks in the task
+            hierarchy.
 
     Returns:
-        A list with all subtasks of the given task, ordered on
-        completion state and time. If no subtasks exist, returns
-        an empty list. Returns at most 50 results.
+        A list with all subtasks of the given task.
+
+    Raises:
+        ValueError: The depth_limit or limit are not positive integers
     """
-    query = task.subtasks.ancestor(Domain.key_from_name(domain)).\
-        order('completed').\
-        order('-time')
-    return query.fetch(50)
+    if not depth_limit:
+        #  ListProperties cannot contain more than 5000 elements anyway
+        depth_limit = 5000
+    if depth_limit < 0 or limit < 0:
+        raise ValueError("Invalid limits")
+
+    task_level = task.level
+    tasks = []
+    for depth in range(depth_limit):
+        query = TaskIndex.all(keys_only=True).\
+            ancestor(Domain.key_from_name(domain)).\
+            filter('level = ', task_level + depth + 1).\
+            filter('hierarchy = ', task.identifier())
+        fetched = query.fetch(limit)
+        tasks.extend(Task.get([key.parent() for key in fetched]))
+        limit = limit - len(fetched)
+        if not fetched or limit < 1:
+            break               # stop
+
+    # Sort the tasks on completion status and then on time, as this is
+    # not possible in the query.
+    def task_cmp(t1, t2):
+        if t1.completed != t2.completed:
+            return cmp(t1.completed, t2.completed)
+        return -cmp(t1.time, t2.time)
+
+    tasks.sort(cmp=task_cmp)
+    return _group_tasks(tasks)
 
 
 def get_all_open_tasks(domain):
@@ -464,7 +492,9 @@ def get_all_open_tasks(domain):
             filter('completed =', False).\
             filter('assignee =', None).\
             order('-time')
-        return _complete_hierarchy(domain, query.fetch(50))
+        return _group_tasks(query.fetch(50),
+                            complete_hierarchy=True,
+                            domain=domain)
     return db.run_in_transaction(txn)
 
 
@@ -485,7 +515,9 @@ def get_all_assigned_tasks(domain, user):
         query = user.assigned_tasks.ancestor(Domain.key_from_name(domain)).\
             order('completed').\
             order('-time')
-        return _complete_hierarchy(domain, query.fetch(50))
+        return _group_tasks(query.fetch(50),
+                            complete_hierarchy=True,
+                            domain=domain)
     return db.run_in_transaction(txn)
 
 
@@ -502,5 +534,7 @@ def get_all_tasks(domain):
     def txn():
         query = Task.all().ancestor(Domain.key_from_name(domain)).\
             order('-time')
-        return _complete_hierarchy(domain, query.fetch(50))
+        return _group_tasks(query.fetch(50),
+                            complete_hierarchy=True,
+                            domain=domain)
     return db.run_in_transaction(txn)
