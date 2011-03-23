@@ -181,7 +181,8 @@ class Task(db.Model):
 
         The title is the first line in the description.
         """
-        return self.description.split('\r\n', 1)[0].split('\n', 1)[0]
+        title = self.description.split('\r\n', 1)[0].split('\n', 1)[0]
+        return title[:-1] if title[-1] == '.' else title
 
     def description_body(self):
         """
