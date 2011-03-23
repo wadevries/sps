@@ -22,3 +22,13 @@ a.plain {
   color: inherit;
   text-decoration: none;
 }
+
+.taskdescription {
+  border: 1px solid #ddd;
+/*  margin: 1em 1em;*/
+  padding: .5em;
+}
+
+.codehilitetable td.linenos {
+  width: 20px;
+}
