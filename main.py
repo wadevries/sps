@@ -13,8 +13,6 @@
 #  limitations under the License.
 
 import os
-from google.appengine.dist import use_library
-use_library('django', '1.2')
 import logging
 from google.appengine.ext import webapp
 from google.appengine.ext.webapp import template
