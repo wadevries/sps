@@ -308,6 +308,8 @@ _DOMAIN_URL = '/d/(%s)' % _VALID_DOMAIN_KEY_NAME
 
 _DOMAIN_AND_TASK_URL = '%s/task/(%s)' % (_DOMAIN_URL, _VALID_TASK_KEY_NAME)
 
+webapp.template.register_template_library('templatetags.templatefilters')
+
 application = webapp.WSGIApplication([('/create-task', CreateTask),
                                       ('/set-task-completed', TaskComplete),
                                       ('/assign-task', AssignTask),

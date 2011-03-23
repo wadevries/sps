@@ -1,9 +1,11 @@
 <html>
+{# {% load django.contrib.markup %} #}
 <head>
   <link rel="stylesheet" href="/css/blueprint/screen.css" type="text/css" media="screen, projection">
   <link rel="stylesheet" href="/css/blueprint/print.css" type="text/css" media="print">
   <!--[if lt IE 8]><link rel="stylesheet" href="/css/blueprint/ie.css" type="text/css" media="screen, projection"><![endif]-->
   <link rel="stylesheet" href="/css/style.css" type="text/css">
+  <link rel="stylesheet" href="/css/pygments_style.css" type="text/css">
   <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.5.1/jquery.min.js"></script>
   <script type="text/javascript">
     $(document).ready(function() {
@@ -32,7 +34,7 @@ logged in as: <b> {{ user_name|escape }} </b>
 {% endif %}
 {% if task_description %}
 Description:<br>
-<textarea disabled>{{ task_description|escape }}</textarea><br>
+<div class="taskdescription">{{ task_description|markdown }}</div>
 {% else %}
 <p>No extra description has been entered for this task.</p>
 {% endif %}
