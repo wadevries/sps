@@ -21,8 +21,8 @@ be pretty straightforward.
 import re
 from google.appengine.ext import db
 from google.appengine.api import users
-from model import Domain, Task, Context, User
-
+from model import Domain, Task, TaskIndex, Context, User
+import workers
 
 VALID_DOMAIN_IDENTIFIER = r'[a-z][a-z0-9-]{1,100}'
 
@@ -204,8 +204,9 @@ def create_task(domain, user, description, assignee=None, parent_task=None):
         task.put()
         return task
 
-    return db.run_in_transaction(txn)
-
+    task = db.run_in_transaction(txn)
+    workers.UpdateTaskIndex.queue_task(domain, task.identifier())
+    return task
 
 def assign_task(domain, user, task, assignee):
     """Assign |task| to assignee.

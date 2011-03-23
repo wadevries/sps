@@ -1,14 +1,14 @@
 from mapreduce import operation as op, context
 
 from model import Domain, Task, User
+import workers
 
 def migrate_task(task):
-    new_task = Task(parent=Domain.key_from_name('sps'),
-                    description=task.description,
-                    user=task.user,
-                    assignee=task.assignee,
-                    completed=task.completed)
-    yield op.db.Put(new_task)
+    # create indices for each task
+    if task.root():
+        workers.UpdateTaskIndex.queue_task(task.domain_identifier(),
+                                           task.identifier())
+
 
 def migrate_user(user):
     if not 'sps' in user.domains:
