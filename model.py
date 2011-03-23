@@ -170,6 +170,12 @@ class Task(db.Model):
         else:
             return None
 
+    def domain_identifier(self):
+        """
+        Returns the domain identifier of the domain of this task.
+        """
+        return self.parent_key().name()
+
     def title(self):
         """Returns the title of the task.
 
@@ -244,3 +250,14 @@ class Task(db.Model):
         if completed and number_of_incomplete_subtasks != 0:
             return False
         return True
+
+
+class TaskIndex(db.Model):
+    """
+    The TaskIndex stores the entire task identifier hierarchy of each
+    task, who is the parent entity of the index. These indices help
+    with certain task hierarchy queries.
+    """
+    # An ordered list of all the parent identifiers of the task.
+    # Empty if the task has no parents.
+    hierarchy = db.StringListProperty(required=True)

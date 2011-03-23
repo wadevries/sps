@@ -1,0 +1,3 @@
+queue:
+- name: update-task-index
+  rate: 20/s
