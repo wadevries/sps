@@ -7,7 +7,8 @@ def migrate_task(task):
     # create indices for each task
     if task.root():
         workers.UpdateTaskIndex.queue_task(task.domain_identifier(),
-                                           task.identifier())
+                                           task.identifier(),
+                                           True) # force update
 
 
 def migrate_user(user):

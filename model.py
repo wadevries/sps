@@ -261,3 +261,6 @@ class TaskIndex(db.Model):
     # An ordered list of all the parent identifiers of the task.
     # Empty if the task has no parents.
     hierarchy = db.StringListProperty(required=True)
+    # The level in the hierarchy of this index. Equivalent to the
+    # number of items in the hierarchy list.
+    level = db.IntegerProperty(required=True, default=0)

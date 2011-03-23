@@ -36,6 +36,8 @@ class UpdateTaskIndex(webapp.RequestHandler):
     def post(self):
         domain_identifier = self.request.get('domain')
         task_identifier = self.request.get('task')
+        force_update = self.request.get('force_update')
+
         def txn():
             # Returns (task, changed) tuple, where changed is set if
             # the task index was updated.
@@ -50,7 +52,8 @@ class UpdateTaskIndex(webapp.RequestHandler):
             if not index:
                 index = TaskIndex(parent=task,
                                   key_name=task_identifier,
-                                  hierarchy=[])
+                                  hierarchy=[],
+                                  level=0)
                 new_index = True
             parent_identifier = task.parent_task_identifier()
             parent_hierarchy = []
@@ -69,8 +72,11 @@ class UpdateTaskIndex(webapp.RequestHandler):
             if parent_identifier:
                 hierarchy.append(parent_identifier)
 
-            if new_index or set(index.hierarchy) ^ set(hierarchy):
+            if (force_update
+                or new_index
+                or set(index.hierarchy) ^ set(hierarchy)):
                 index.hierarchy = hierarchy
+                index.level = len(hierarchy)
                 index.put()
                 return task, True
             return task, False
@@ -88,20 +94,24 @@ class UpdateTaskIndex(webapp.RequestHandler):
         for subtask_key in query:
             subtask_identifier = subtask_key.id_or_name()
             # TODO(tijmen): Batch queue tasks
-            UpdateTaskIndex.queue_task(domain_identifier, subtask_identifier)
+            UpdateTaskIndex.queue_task(domain_identifier,
+                                       subtask_identifier,
+                                       force_update)
 
     @staticmethod
-    def queue_task(domain_identifier, task_identifier):
+    def queue_task(domain_identifier, task_identifier, force=False):
         """
         Queues a new task to update the task index of the task with
-        the given identifier.
+        the given identifier. If force is set to true, the update will
+        always be done, even if the hierarchy is not changed.
         """
         queue = taskqueue.Queue('update-task-index')
         # TODO(tijmen): Create a unique task name based on some sort
         # of versioning number in the task.
         task = taskqueue.Task(url='/workers/update-task-index',
                               params={ 'task': task_identifier,
-                                       'domain': domain_identifier })
+                                       'domain': domain_identifier,
+                                       'force_update': force})
         try:
             queue.add(task)
         except taskqueue.TransientError:
