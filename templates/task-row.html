@@ -13,12 +13,14 @@
   <td class="assignee">{{ task.assignee_description|escape }}</td>
   {% else %}
   <td class="assign-button">
+    {% if task.can_assign_to_self %}
     <form action="/assign-task" method="post">
       <input type="submit" value="Assign to self">
       <input type="hidden" name="assignee" value="{{ user_identifier }}">
       <input type="hidden" name="id" value="{{ task.id }}">
       <input type="hidden" name="domain" value="{{ domain_identifier }}">
     </form>
+    {% endif %}
   </td>
   {% endif %}
 </tr>

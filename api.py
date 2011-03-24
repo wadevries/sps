@@ -534,6 +534,7 @@ def get_all_open_tasks(domain):
     """
     def txn():
         query = Task.all().ancestor(Domain.key_from_name(domain)).\
+            filter('number_of_subtasks =', 0).\
             filter('completed =', False).\
             filter('assignee =', None).\
             order('-time')

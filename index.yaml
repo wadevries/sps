@@ -15,6 +15,15 @@ indexes:
   properties:
   - name: assignee
   - name: completed
+  - name: number_of_subtasks
+  - name: time
+    direction: desc
+
+- kind: Task
+  ancestor: yes
+  properties:
+  - name: assignee
+  - name: completed
   - name: time
     direction: desc
 
