@@ -256,8 +256,15 @@ class BakeAssigneeDescription(webapp.RequestHandler):
         domain_identifier = self.request.get('domain')
         task_identifier = self.request.get('task')
         task = api.get_task(domain_identifier, task_identifier)
+        if not task:
+            logging.error("No task '%s/%s'", domain_identifier, task_identifier)
+            return
         index = AssigneeIndex.get_by_key_name(task.identifier(),
                                               parent=task)
+        if not index:
+            logging.error("No assignee index for task '%s'", task)
+            return
+
         assignees = index.assignees
         description = ""
         if len(assignees) == 1:
