@@ -264,6 +264,9 @@ class Task(db.Model):
             return False
         return True
 
+    def __str__(self):
+        return "%s/%s" % (self.domain_identifier(), self.identifier())
+
 
 class TaskIndex(db.Model):
     """
