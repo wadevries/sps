@@ -8,6 +8,15 @@ mapreduce:
       default: model.Task
     - name: processing_rate
       default: 1
+- name: Clear Assignee indices
+  mapper:
+    input_reader: mapreduce.input_readers.DatastoreInputReader
+    handler: mappers.clear_assignee_index
+    params:
+    - name: entity_kind
+      default: model.Task
+    - name: processing_rate
+      default: 1
 - name: Migrate users
   mapper:
     input_reader: mapreduce.input_readers.DatastoreInputReader
