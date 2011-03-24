@@ -64,7 +64,7 @@ class UpdateTaskIndex(webapp.RequestHandler):
                 if not parent_index:
                     logging.error("Missing index for parent task '%s/%s'",
                                   domain_identifier, parent_identifier)
-                    self.error(400) # Retry
+                    self.error(500) # Retry
                     return None, False
                 parent_hierarchy = parent_index.hierarchy
 
@@ -153,20 +153,14 @@ class UpdateAssigneeIndex(webapp.RequestHandler):
             description = "%s/%s" % (domain_identifier, task_identifier)
             if not task:
                 logging.error("Task '%s/%s' does not exist", description)
-                return
+                return None, False
 
             index = _get_index(task)
             if index.sequence < sequence: # Not our time yet, retry later
-                logging.info("Incorrect sequence for task '%s': "
-                             "sequence: %s, %s found, retrying...",
-                             task, sequence, index.sequence)
-                self.error(400)
-                return
+                self.error(500)
+                return task, False
             if index.sequence > sequence: # passed us, must be a duplicate
-                logging.info("Index advanced past sequence for task '%s': "
-                             "sequence: %s, %s found, discarding...",
-                             task, sequence, index.sequence)
-                return
+                return task, False
 
             reference_counts = json.loads(index.reference_counts)
             update_reference_count(reference_counts)
@@ -187,16 +181,17 @@ class UpdateAssigneeIndex(webapp.RequestHandler):
             index.assignee_count = len(index.assignees)
             index.reference_counts = json.dumps(reference_counts)
             index.sequence = index.sequence + 1 # move forward
-            logging.info("Moved sequence for task '%s': "
-                         "sequence: %s -> %s",
-                         task, sequence, index.sequence)
             index.put()
             parent_task = task.parent_task
             if parent_task:
                 UpdateAssigneeIndex.queue_worker(parent_task,
                                                  propagate_add_assignee,
                                                  propagate_remove_assignee)
-        db.run_in_transaction(txn)
+            return task, (propagate_add_assignee or propagate_remove_assignee)
+
+        task, changed = db.run_in_transaction(txn)
+        if changed and task:
+            BakeAssigneeDescription.queue_worker(task)
 
 
     @staticmethod
@@ -239,9 +234,6 @@ class UpdateAssigneeIndex(webapp.RequestHandler):
         sequence = task.assignee_index_sequence
         task.assignee_index_sequence = sequence + 1
         task.put()
-        logging.info("Queuing worker for task '%s', add: '%s', remove: '%s'"
-                     " sequence: %s" % (task, add_assignee,
-                                        remove_assignee, sequence))
         queue = taskqueue.Queue('update-assignee-index')
         task = taskqueue.Task(url='/workers/update-assignee-index',
                               params={ 'task': task.identifier(),
@@ -255,8 +247,45 @@ class UpdateAssigneeIndex(webapp.RequestHandler):
             queue.add(task, transactional=True)
 
 
+class BakeAssigneeDescription(webapp.RequestHandler):
+    """
+    Bakes the task assignee description based on the assignees in the
+    assignee index.
+    """
+    def post(self):
+        domain_identifier = self.request.get('domain')
+        task_identifier = self.request.get('task')
+        task = api.get_task(domain_identifier, task_identifier)
+        index = AssigneeIndex.get_by_key_name(task.identifier(),
+                                              parent=task)
+        assignees = index.assignees
+        description = ""
+        if len(assignees) == 1:
+            user = api.get_user_from_identifier(assignees[0])
+            description = user.name
+        elif len(assignees) == 2:
+            user0 = api.get_user_from_identifier(assignees[0])
+            user1 = api.get_user_from_identifier(assignees[1])
+            description = "%s, %s" % (user0.name, user1.name)
+        elif len(assignees) > 2:
+            user = api.get_user_from_identifier(assignees[0])
+            description = "%s and %d others" % (user, len(assignees) - 1)
+        task.baked_assignee_description = description
+        task.put()
+
+    @staticmethod
+    def queue_worker(task):
+        """Queues a worker to update task assignee description of the given
+        task instance.
+        """
+        taskqueue.add(url='/workers/bake-assignee-description',
+                      params={ 'task': task.identifier(),
+                               'domain': task.domain_identifier()})
+
+
 mapping = [('/workers/update-task-index', UpdateTaskIndex),
-           ('/workers/update-assignee-index', UpdateAssigneeIndex)]
+           ('/workers/update-assignee-index', UpdateAssigneeIndex),
+           ('/workers/bake-assignee-description', BakeAssigneeDescription)]
 application = webapp.WSGIApplication(mapping)
 
 def main():

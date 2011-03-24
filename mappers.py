@@ -29,8 +29,10 @@ def clear_assignee_index(task):
     task.assignee_index_sequence = 0
     yield op.db.Put(task)
 
-
 def migrate_task(task):
+    workers.BakeAssigneeDescription.queue_worker(task)
+
+def create_assignee_index(task):
     def txn():
         index = AssigneeIndex.get_by_key_name(task.identifier(),
                                               parent=task)

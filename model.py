@@ -156,6 +156,10 @@ class Task(db.Model):
     # The next available sequence number for an assignee update. Each
     # time an update is queued this number must be incremented.
     assignee_index_sequence = db.IntegerProperty(default=0, indexed=False)
+    # Pre-baked assignee description, updated through workers when
+    # the assignees change.
+    baked_assignee_description = db.StringProperty(default="", indexed=False)
+
 
     def identifier(self):
         """Returns a string with the task identifier"""
@@ -290,9 +294,9 @@ class AssigneeIndex(db.Model):
     # An ordered list of identifiers of all users that are
     # participating in this task, because they are assigned to an
     # atomic subtask.
-    assignees = db.StringListProperty()
+    assignees = db.StringListProperty(default=[])
     # The size of the assignees list
-    assignee_count = db.IntegerProperty()
+    assignee_count = db.IntegerProperty(default=0)
     # A JSON encoded dictionary that stores the number of tasks a user
     # has assigned to him in subtasks of this task. This value is then
     # used to decide whether to propagate the changes upwards in the

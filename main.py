@@ -54,7 +54,9 @@ def get_and_delete_messages(session):
 
 def assignee_description(task):
     """Returns a string describing the assignee of a task"""
-    return (task.assignee.name if task.assignee else "<not assigned>")
+    if not task.baked_assignee_description:
+        return "<not_assigned>"
+    return task.baked_assignee_description
 
 
 def _task_template_values(tasks, user):

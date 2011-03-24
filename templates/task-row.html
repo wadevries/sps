@@ -9,7 +9,7 @@
       {{ task.title|escape }} {% if task.num_subtasks %}({{ task.num_subtasks }} subtask{{ task.num_subtasks|pluralize }}){% endif %}
     </a>
   </td>
-  {% if task.is_assigned %}
+  {% if task.assignee_description %}
   <td class="assignee">{{ task.assignee_description|escape }}</td>
   {% else %}
   <td class="assign-button">

@@ -246,6 +246,8 @@ def create_task(domain, user, description, assignee=None, parent_task=None):
             super_task.number_of_subtasks = super_task.number_of_subtasks + 1
             super_task.increment_incomplete_subtasks()
             super_task.put()
+        if assignee:
+            task.baked_assignee_description = assignee.name
         task.put()
         return task
 
