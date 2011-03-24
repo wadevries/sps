@@ -54,8 +54,6 @@ def get_and_delete_messages(session):
 
 def assignee_description(task):
     """Returns a string describing the assignee of a task"""
-    if not task.baked_assignee_description:
-        return "<not_assigned>"
     return task.baked_assignee_description
 
 
@@ -74,7 +72,7 @@ def _task_template_values(tasks, user):
               'levels': range(task.level),
               'completed': task.completed,
               'is_assigned': task.assignee_key() != None,
-              'can_assign_to_self': api.can_assign_task(task, user, user),
+              'can_assign_to_self': api.can_assign_to_self(task, user),
               'assignee_description': assignee_description(task),
               'can_complete': api.can_complete_task(task, user),
               'num_subtasks': task.number_of_subtasks,

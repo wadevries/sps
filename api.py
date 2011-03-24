@@ -158,6 +158,22 @@ def can_complete_task(task, user):
     """
     return task.atomic() and task.assignee_key() == user.key()
 
+def can_assign_to_self(task, user):
+    """Returns true if a user can assign the task to himself.
+
+    Args:
+        task: An instance of the Task model
+        user: A User model instance
+
+    Returns:
+        True if the user can assign the task to himself. If the user
+        is already assigned to the task, then this function will
+        return false.
+    """
+    if not task.atomic() or task.assignee_identifier():
+        return False
+    return can_assign_task(task, user, user)
+
 
 def can_assign_task(task, user, assignee):
     """Checks whether a user can assign the task to assignee.

@@ -9,18 +9,16 @@
       {{ task.title|escape }} {% if task.num_subtasks %}({{ task.num_subtasks }} subtask{{ task.num_subtasks|pluralize }}){% endif %}
     </a>
   </td>
-  {% if task.assignee_description %}
-  <td class="assignee">{{ task.assignee_description|escape }}</td>
-  {% else %}
+  {% if task.can_assign_to_self %}
   <td class="assign-button">
-    {% if task.can_assign_to_self %}
     <form action="/assign-task" method="post">
       <input type="submit" value="Assign to self">
       <input type="hidden" name="assignee" value="{{ user_identifier }}">
       <input type="hidden" name="id" value="{{ task.id }}">
       <input type="hidden" name="domain" value="{{ domain_identifier }}">
     </form>
-    {% endif %}
   </td>
+  {% else %}
+  <td class="assignee">{{ task.assignee_description|escape }}</td>
   {% endif %}
 </tr>
