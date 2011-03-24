@@ -1,3 +1,7 @@
 queue:
 - name: update-task-index
   rate: 20/s
+
+- name: update-assignee-index
+  rate: 20/s
+  max_concurrent_requests: 1

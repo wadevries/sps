@@ -72,6 +72,7 @@ def _task_template_values(tasks, user):
               'levels': range(task.level),
               'completed': task.completed,
               'is_assigned': task.assignee_key() != None,
+              'can_assign_to_self': api.can_assign_task(task, user, user),
               'assignee_description': assignee_description(task),
               'can_complete': api.can_complete_task(task, user),
               'num_subtasks': task.number_of_subtasks,
@@ -246,13 +247,12 @@ class AssignTask(webapp.RequestHandler):
         if not user:
             self.error(403)
             return
-        task = api.get_task(domain, task_id)
         assignee = User.get_by_key_name(assignee)
-        if not task or not assignee:
+        if not assignee:
             self.error(403)
-            logging.error("No task or assignee")
+            logging.error("No assignee")
             return
-        api.assign_task(domain, user, task, assignee)
+        task = api.assign_task(domain, task_id, user, assignee)
         session = Session(writer='cookie',
                           wsgiref_headers=self.response.headers)
         add_message(session, "Task '%s' assigned to '%s'" %

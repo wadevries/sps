@@ -66,6 +66,12 @@ def get_user():
         user.put()
     return user
 
+def get_user_from_identifier(user_identifier):
+    """Returns the user corresponding to the given identifier"""
+    # TODO(tijmen): Name this get_user and rename the current
+    # function to something like get_logged_in_user().
+    return User.get_by_key_name(user_identifier)
+
 
 def get_and_validate_user(domain_identifier):
     """Gets the currently logged in user and validates if he
@@ -153,6 +159,46 @@ def can_complete_task(task, user):
     return task.atomic() and task.assignee_key() == user.key()
 
 
+def can_assign_task(task, user, assignee):
+    """Checks whether a user can assign the task to assignee.
+
+    A task can only be assigned if the task is an atomic task and
+    one of the following conditions is true:
+    - The |user| is the current assignee of the task. Assignees
+    can change the assignee of their tasks.
+    - The |task| does not have an assignee yet and the user assigns
+    the task to himself (assignee == user).
+    - The |user| has admin rights. Admins can always change the assignee.
+
+    Args:
+        task: A Task model instance
+        user: A User model instance
+        assignee: A User model instance, or None
+
+    Returns:
+        True if user is allowed to set the assignee of the task to the
+        given assignee and the task is atomic.
+
+    Raises:
+        ValueError: If the user and assignee are not both members of
+            the domain of the task.
+    """
+    domain_identifier = task.domain_identifier()
+    if not member_of_domain(domain_identifier, user, assignee):
+        raise ValueError("User and assignee not in the same domain")
+
+    if not task.atomic():
+        return False
+    if user.identifier() == task.assignee_identifier():
+        return True
+    if not task.assignee_key() and user.identifier() == assignee.identifier():
+        return True
+    if user.admin:
+        # TOOD(tijmen): Old admin code, change
+        return True
+    return False
+
+
 def create_task(domain, user, description, assignee=None, parent_task=None):
     """Create and store a task in the Datastore.
 
@@ -193,7 +239,6 @@ def create_task(domain, user, description, assignee=None, parent_task=None):
         task = Task(parent=Domain.key_from_name(domain),
                     description=description,
                     user=user,
-                    assignee=assignee,
                     context=user.default_context_key(),
                     parent_task=super_task,
                     level=super_task.level + 1 if super_task else 0)
@@ -206,52 +251,52 @@ def create_task(domain, user, description, assignee=None, parent_task=None):
 
     task = db.run_in_transaction(txn)
     workers.UpdateTaskIndex.queue_task(domain, task.identifier())
+    if assignee:
+        assign_task(domain, task.identifier(), user, user)
     return task
 
-def assign_task(domain, user, task, assignee):
-    """Assign |task| to assignee.
 
-    Sets the assignee property of |task|. |user| is the user
-    performing the operation. The assignment will only succeed if one
-    of the following conditions is true:
-    - The |user| is the current assignee of the task. Assignees can
-      change the assignee of their tasks.
-    - The |task| does not have an assignee yet and the user assigns the
-      task to himself (assignee == user).
-    - The |user| has admin rights. Admins can always change the assignee.
+def assign_task(domain_identifier, task_identifier, user, assignee):
+    """Assigns a task to an assignee.
+
+    Sets the assignee property of task. user is the user performing
+    the operation. The assignment will only succeed if the user is
+    allowed to perform the operation, which can be checked beforehand
+    through can_assign_task().
 
     Args:
-        domain: The domain identifier
-        user: A User model instance of the user performing the assignment
-            operation.
-        task: A Task model instance of the task whose assignee is being set.
-        assignee: A User model instance of the future assignee of the task.
+        domain_identifier: The domain identifier string
+        task_identifier: The task identifier of the task that is assigned
+        user: An instance of the User model that is performing the
+            assignment operation.
+        assignee: An instance of the User model to whom the task is
+            assigned to.
 
     Returns:
         The task instance. The assignee will be set and the task instance
         is stored in the datastore.
 
     Raises:
-        ValueError: If none of the above conditions are met or if
-            the user and assignee are not in the same domain.
+        ValueError: If the assignment operation is invalid, or if the
+            task does not exist.
     """
-    if not member_of_domain(domain, user, assignee):
-        raise ValueError("Assignee and user domain do not match")
+    def txn():
+        task = get_task(domain_identifier, task_identifier)
+        if not task:
+            raise ValueError("Task does not exist")
+        if not can_assign_task(task, user, assignee):
+            raise ValueError("Cannot assign")
 
-    def can_assign():
-        if not task.assignee_key() and user.key() == assignee.key():
-            return True
-        if user.key() == task.assignee_key():
-            return True
-        if user.admin:
-            return True
-        return False
+        previous_assignee = task.assignee_identifier()
+        task.assignee = assignee
+        workers.UpdateAssigneeIndex.queue_worker(
+            task,
+            add_assignee=assignee.identifier(),
+            remove_assignee=previous_assignee)
+        task.put()
+        return task
 
-    if not can_assign():
-        raise ValueError("Cannot assign")
-    task.assignee = assignee
-    task.put()
-    return task
+    return db.run_in_transaction(txn)
 
 
 def set_task_completed(domain, user, task_identifier, completed):
@@ -277,7 +322,7 @@ def set_task_completed(domain, user, task_identifier, completed):
     """
     def txn():
         task = get_task(domain, task_identifier)
-        if (not task or not task.atomic() or not can_complete_task(task, user)):
+        if not task or not task.atomic() or not can_complete_task(task, user):
             raise ValueError("Invalid task")
 
         if not task.completed ^ completed:

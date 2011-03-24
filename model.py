@@ -128,7 +128,7 @@ class Task(db.Model):
                                 required=True,
                                 collection_name="tasks")
     # The user that has been assigned to complete this task. Can be
-    # None.
+    # None. This value must be ignored if a task is a composite task!
     assignee = db.ReferenceProperty(default=None,
                                     reference_class=User,
                                     collection_name="assigned_tasks")
@@ -153,6 +153,9 @@ class Task(db.Model):
     # Level of this task in hierarchy. A task without a parent task
     # has level 0.
     level = db.IntegerProperty(default=0)
+    # The next available sequence number for an assignee update. Each
+    # time an update is queued this number must be incremented.
+    assignee_index_sequence = db.IntegerProperty(default=0, indexed=False)
 
     def identifier(self):
         """Returns a string with the task identifier"""
@@ -205,6 +208,15 @@ class Task(db.Model):
         Returns the key of the |assignee| without dereferencing the property.
         """
         return Task.assignee.get_value_for_datastore(self)
+
+    def assignee_identifier(self):
+        """
+        Returns the identifier of the assignee of this task. Returns
+        None in case there is no assignee. Does not dereference the
+        property.
+        """
+        key = self.assignee_key()
+        return key.name() if key else None
 
     def parent_task_key(self):
         """
@@ -265,3 +277,24 @@ class TaskIndex(db.Model):
     # The level in the hierarchy of this index. Equivalent to the
     # number of items in the hierarchy list.
     level = db.IntegerProperty(required=True, default=0)
+
+
+class AssigneeIndex(db.Model):
+    """
+    The AssigneeIndex stores all identifiers of the users that are
+    assigned to a task. Each AssigneeIndex has a parent Task entity.
+    """
+    # An ordered list of identifiers of all users that are
+    # participating in this task, because they are assigned to an
+    # atomic subtask.
+    assignees = db.StringListProperty()
+    # The size of the assignees list
+    assignee_count = db.IntegerProperty()
+    # A JSON encoded dictionary that stores the number of tasks a user
+    # has assigned to him in subtasks of this task. This value is then
+    # used to decide whether to propagate the changes upwards in the
+    # tree.
+    reference_counts = db.TextProperty(default="{}")
+    # A sequence number to ensure idempotency of the update operation
+    # of the reference counts.
+    sequence = db.IntegerProperty(default=0, indexed=False)
