@@ -81,7 +81,6 @@ class UpdateTaskIndex(webapp.RequestHandler):
             return task, False
 
         task, changed = db.run_in_transaction(txn)
-
         if not changed:
             logging.info("Task '%s/%s' index is unchanged",
                          domain_identifier, task_identifier)
@@ -158,9 +157,15 @@ class UpdateAssigneeIndex(webapp.RequestHandler):
 
             index = _get_index(task)
             if index.sequence < sequence: # Not our time yet, retry later
+                logging.info("Incorrect sequence for task '%s': "
+                             "sequence: %s, %s found, retrying...",
+                             task, sequence, index.sequence)
                 self.error(400)
                 return
             if index.sequence > sequence: # passed us, must be a duplicate
+                logging.info("Index advanced past sequence for task '%s': "
+                             "sequence: %s, %s found, discarding...",
+                             task, sequence, index.sequence)
                 return
 
             reference_counts = json.loads(index.reference_counts)
@@ -182,6 +187,9 @@ class UpdateAssigneeIndex(webapp.RequestHandler):
             index.assignee_count = len(index.assignees)
             index.reference_counts = json.dumps(reference_counts)
             index.sequence = index.sequence + 1 # move forward
+            logging.info("Moved sequence for task '%s': "
+                         "sequence: %s -> %s",
+                         task, sequence, index.sequence)
             index.put()
             parent_task = task.parent_task
             if parent_task:
@@ -231,8 +239,8 @@ class UpdateAssigneeIndex(webapp.RequestHandler):
         sequence = task.assignee_index_sequence
         task.assignee_index_sequence = sequence + 1
         task.put()
-        logging.info("Queuing worker: task '%s', add: '%s', remove: '%s'"
-                     " sequence: %s" % (task.identifier(), add_assignee,
+        logging.info("Queuing worker for task '%s', add: '%s', remove: '%s'"
+                     " sequence: %s" % (task, add_assignee,
                                         remove_assignee, sequence))
         queue = taskqueue.Queue('update-assignee-index')
         task = taskqueue.Task(url='/workers/update-assignee-index',
