@@ -33,7 +33,7 @@ logged in as: <b> {{ user_name|escape }} </b>
 {% endif %}
 {% if task_description %}
 Description:<br>
-<div class="taskdescription">{{ task.description|markdown }}</div>
+<div class="taskdescription">{{ task_description|markdown }}</div>
 {% else %}
 <p>No extra description has been entered for this task.</p>
 {% endif %}

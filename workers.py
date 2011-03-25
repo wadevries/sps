@@ -92,28 +92,43 @@ class UpdateTaskIndex(webapp.RequestHandler):
         for subtask_key in query:
             subtask_identifier = subtask_key.id_or_name()
             # TODO(tijmen): Batch queue tasks
-            UpdateTaskIndex.queue_task(domain_identifier,
-                                       subtask_identifier,
-                                       force_update)
+            UpdateTaskIndex.queue_worker(domain_identifier,
+                                         subtask_identifier,
+                                         force_update)
 
     @staticmethod
-    def queue_task(domain_identifier, task_identifier, force=False):
+    def queue_worker(domain_identifier,
+                     task_identifier,
+                     force=False,
+                     transactional=False):
         """
         Queues a new task to update the task index of the task with
-        the given identifier. If force is set to true, the update will
-        always be done, even if the hierarchy is not changed.
+        the given identifier.
+
+        Args:
+            domain_identifier: The domain identifier string
+            task_identifier: The task identifier string
+            force: If set to true, the entire hierarchy will be updated,
+                even if there are no changes.
+            transactional: If set to true, then the task will be added
+                as a transactional task.
+
+        Raises:
+            ValueError: If transactional is set to True and the
+                 function is not called as part of a transaction.
         """
+        if transactional and not db.is_in_transaction():
+            raise ValueError("Requires a transaction")
+
         queue = taskqueue.Queue('update-task-index')
-        # TODO(tijmen): Create a unique task name based on some sort
-        # of versioning number in the task.
         task = taskqueue.Task(url='/workers/update-task-index',
                               params={ 'task': task_identifier,
                                        'domain': domain_identifier,
                                        'force_update': force})
         try:
-            queue.add(task)
+            queue.add(task, transactional=transactional)
         except taskqueue.TransientError:
-            queue.add(task)
+            queue.add(task, transactional=transactional)
 
 
 class UpdateAssigneeIndex(webapp.RequestHandler):

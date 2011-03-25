@@ -207,7 +207,40 @@ class CreateTask(webapp.RequestHandler):
             self.redirect('/d/%s/' % domain)
 
 
-class TaskComplete(webapp.RequestHandler):
+class MoveTask(webapp.RequestHandler):
+    """
+    Handler for POST requests to move the task to another
+    parent task.
+    """
+    def post(self):
+        try:
+            domain_identifier = self.request.get('domain')
+            task_identifier = self.request.get('task_id')
+            new_parent_identifier = self.request.get('new_parent')
+        except (TypeError, ValueError):
+            self.error(400)
+            return
+        user = api.get_and_validate_user(domain_identifier)
+        if not user:
+            self.error(401)
+            return
+        self.session = Session(writer='cookie',
+                               wsgiref_headers=self.response.headers)
+        try:
+            task = api.change_task_parent(domain_identifier,
+                                          user,
+                                          task_identifier,
+                                          new_parent_identifier)
+        except ValueError:
+            logging.error("Error while moving")
+            self.error(401)
+            return
+
+        add_message(self.session, "Task '%s' moved" % task.title())
+        self.redirect('/d/%s/task/%s' % (domain_identifier, task_identifier))
+
+
+class CompleteTask(webapp.RequestHandler):
     """Handler for POST requests to set the completed flag on a task.
 
     A user can only complete tasks that are assigned to him, and not the
