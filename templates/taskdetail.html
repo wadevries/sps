@@ -71,6 +71,12 @@ title of the task.
 <input type="hidden" name="parent" value="{{ task_identifier }}">
 <input type="submit" value="Create Task">
 </form>
+<br>
+
+<h3>Move Task</h3>
+<form action="/d/{{ domain_identifier }}/task/{{ task_identifier }}/move">
+<input type="submit" value="Move Task">
+</form>
 
 </body>
 </html>

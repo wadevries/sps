@@ -305,9 +305,9 @@ def create_task(domain, user, description, assignee=None, parent_task=None):
         if assignee:
             task.baked_assignee_description = assignee.name
         task.put()
-        workers.UpdateTaskIndex.queue_task(domain,
-                                           task.identifier(),
-                                           transactional=True)
+        workers.UpdateTaskIndex.queue_worker(domain,
+                                             task.identifier(),
+                                             transactional=True)
         return task
 
     task = db.run_in_transaction(txn)
@@ -469,9 +469,11 @@ def _check_for_cycle(task, new_parent):
         raise ValueError("Tasks must be in the same domain")
     if not db.is_in_transaction():
         raise ValueError("Must be part of a transaction")
+    visited = set([task.identifier()])
     while new_parent:
-        if task.identifier() == new_parent.identifier():
+        if new_parent.identifier() in visited:
             return False
+        visited.add(new_parent.identifier())
         parent_identifier = new_parent.parent_task_identifier()
         if parent_identifier:
             new_parent = _get_task_from_memory(task.domain_identifier(),
@@ -480,7 +482,7 @@ def _check_for_cycle(task, new_parent):
             new_parent = None
     return True
 
-def _update_task_levels(task, new_level):
+def _update_task_levels(task, level):
     """
     Updates all level property of the given task and propagates this
     to all subtasks in the hierarchy as wel. The updated tasks will be
@@ -506,13 +508,11 @@ def _update_task_levels(task, new_level):
     query = TaskIndex.all(keys_only=True).\
         ancestor(task.domain_key()).\
         filter('hierarchy = ', task.identifier())
-    keys = query.fetch(20)
-    while keys:
-        subtasks = Task.get(key.parent() for key in keys)
-        for subtask in subtasks:
-            subtask.level = subtask.level + difference
-        db.put(subtasks)
-        keys = query.fetch(20)
+
+    subtasks = Task.get(key.parent() for key in query)
+    for subtask in subtasks:
+        subtask.level = subtask.level + difference
+    db.put(subtasks)
 
 
 def change_task_parent(domain_identifier,
@@ -542,7 +542,7 @@ def change_task_parent(domain_identifier,
         ValueError: The task does not exist, or the user is not
         allowed to change the task.
     """
-    if not member_of_domain(domain, user):
+    if not member_of_domain(domain_identifier, user):
         raise ValueError("User is not a member of the domain")
 
     def remove_task_from_parent(task, parent):

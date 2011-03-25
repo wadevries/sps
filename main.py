@@ -138,7 +138,8 @@ class TaskDetail(webapp.RequestHandler):
     """
     def get(self, domain_identifier, task_identifier):
         task = api.get_task(domain_identifier, task_identifier)
-        if not task:
+        user = api.get_and_validate_user(domain_identifier)
+        if not task or not user:
             self.error(404)
             return
         session = Session(writer='cookie',
@@ -166,6 +167,40 @@ class TaskDetail(webapp.RequestHandler):
             }
         path = os.path.join(os.path.dirname(__file__),
                             'templates/taskdetail.html')
+        self.response.out.write(template.render(path, template_values))
+
+
+class TaskMoveView(webapp.RequestHandler):
+    """
+    Handler to show the Move task gui.
+    """
+    def get(self, domain_identifier, task_identifier):
+        task = api.get_task(domain_identifier, task_identifier)
+        user = api.get_and_validate_user(domain_identifier)
+        if not task or not user:
+            self.error(404)
+            return
+
+        session = Session(writer='cookie',
+                          wsgiref_headers=self.response.headers)
+        user = api.get_user()
+        domain = api.get_domain(domain_identifier)
+        tasks = api.get_all_tasks(domain_identifier)
+
+        template_values = {
+            'domain_name': domain.name,
+            'domain_identifier': domain_identifier,
+            'user_name': user.name,
+            'user_identifier': user.identifier(),
+            'messages': get_and_delete_messages(session),
+            'task_title' : task.title(),
+            'task_description': task.description_body(),
+            'task_identifier': task.identifier(),
+            'task_num_subtasks': task.number_of_subtasks,
+            'tasks': _task_template_values(tasks, user),
+            }
+        path = os.path.join(os.path.dirname(__file__),
+                            'templates/movetask.html')
         self.response.out.write(template.render(path, template_values))
 
 
@@ -315,41 +350,26 @@ class CreateDomain(webapp.RequestHandler):
         self.redirect('/d/%s/' % domain.key().name())
 
 
-
-class CreateDomain(webapp.RequestHandler):
-    """Handler to create new domains.
-    """
-    def post(self):
-        try:
-            domain_id = self.request.get('domain')
-            title = self.request.get('title')
-        except (TypeError, ValueError):
-            self.error(403)
-            return
-        user = api.get_user()
-        domain = api.create_domain(domain_id, title, user)
-        if not domain:
-            self.response.out.write("Could not create domain")
-            return
-        self.response.out.write("Created domain '%s'" % domain.key().name())
-
-
 _VALID_DOMAIN_KEY_NAME = '[a-z][a-z0-9-]{1,100}'
 
 _VALID_TASK_KEY_NAME = '[a-z0-9-]{1,100}'
 
-_DOMAIN_URL = '/d/(%s)' % _VALID_DOMAIN_KEY_NAME
+_DOMAIN_URL = '/d/(%s)/?' % _VALID_DOMAIN_KEY_NAME
 
-_DOMAIN_AND_TASK_URL = '%s/task/(%s)' % (_DOMAIN_URL, _VALID_TASK_KEY_NAME)
+_TASK_URL = '%s/task/(%s)/?' % (_DOMAIN_URL, _VALID_TASK_KEY_NAME)
+
+_TASK_MOVE_URL = "%s/move/?" % (_TASK_URL)
 
 webapp.template.register_template_library('templatetags.templatefilters')
 
 application = webapp.WSGIApplication([('/create-task', CreateTask),
-                                      ('/set-task-completed', TaskComplete),
+                                      ('/set-task-completed', CompleteTask),
                                       ('/assign-task', AssignTask),
+                                      ('/move-task', MoveTask),
                                       ('/create-domain', CreateDomain),
-                                      (_DOMAIN_URL + '/', DomainOverview),
-                                      (_DOMAIN_AND_TASK_URL, TaskDetail),
+                                      (_DOMAIN_URL, DomainOverview),
+                                      (_TASK_MOVE_URL, TaskMoveView),
+                                      (_TASK_URL, TaskDetail),
                                       ('/', Landing)])
 
 def main():

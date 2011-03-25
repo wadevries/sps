@@ -250,13 +250,16 @@ class UpdateAssigneeIndex(webapp.RequestHandler):
         task.assignee_index_sequence = sequence + 1
         task.put()
         queue = taskqueue.Queue('update-assignee-index')
-        task = taskqueue.Task(url='/workers/update-assignee-index',
-                              params={ 'task': task.identifier(),
-                                       'domain': task.domain_identifier(),
-                                       'sequence': sequence,
-                                       'add_assignee': add_assignee,
-                                       'remove_assignee': remove_assignee})
+        params = { 'task': task.identifier(),
+                   'domain': task.domain_identifier(),
+                   'sequence': sequence }
+        if add_assignee:
+            params['add_assignee'] = add_assignee
+        if remove_assignee:
+            params['remove_assignee'] = remove_assignee
         try:
+            task = taskqueue.Task(url='/workers/update-assignee-index',
+                                  params=params)
             queue.add(task, transactional=True)
         except taskqueue.TransientError:
             queue.add(task, transactional=True)
