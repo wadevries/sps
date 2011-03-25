@@ -33,11 +33,24 @@ logged in as: <b> {{ user_name|escape }} </b>
 {% endif %}
 {% if task_description %}
 Description:<br>
-<div class="taskdescription">{{ task_description|markdown }}</div>
+<div class="taskdescription">{{ task.description|markdown }}</div>
 {% else %}
 <p>No extra description has been entered for this task.</p>
 {% endif %}
-<p>Assigned to {{ task_assignee|escape }}</p>
+
+{% if task_can_assign_to_self %}
+<form action="/assign-task" method="post">
+  <input type="submit" value="Assign to self">
+  <input type="hidden" name="assignee" value="{{ user_identifier }}">
+  <input type="hidden" name="id" value="{{ task_identifier }}">
+  <input type="hidden" name="domain" value="{{ domain_identifier }}">
+</form>
+{% else %}
+{% if task_assignee_description %}
+<p>Assigned to {{ task_assignee_description|escape }}</p>
+{% endif %}
+{% endif %}
+
 <hr>
 <h3>Subtasks</h3>
 <table>
@@ -58,7 +71,6 @@ title of the task.
 <input type="hidden" name="parent" value="{{ task_identifier }}">
 <input type="submit" value="Create Task">
 </form>
-
 
 </body>
 </html>
