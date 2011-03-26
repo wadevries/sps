@@ -266,9 +266,9 @@ class MoveTask(webapp.RequestHandler):
                                           user,
                                           task_identifier,
                                           new_parent_identifier)
-        except ValueError:
-            logging.error("Error while moving")
+        except ValueError, error:
             self.error(401)
+            self.response.out.write("Error while moving task: %s" % error)
             return
 
         add_message(self.session, "Task '%s' moved" % task.title())
