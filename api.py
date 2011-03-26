@@ -389,7 +389,6 @@ def _propagate_completion(task):
     parent_task = _get_task_from_memory(task.domain_identifier(),
                                         task.parent_task_identifier())
     completed = task.completed
-    logging.info("Task %s completed: %s", task, completed)
     while parent_task:
         propagate = False
         if completed:
@@ -399,9 +398,6 @@ def _propagate_completion(task):
             parent_completed = parent_task.completed
             parent_task.increment_incomplete_subtasks()
             propagate = parent_task.completed ^ parent_completed
-        logging.info("Parent %s completed: %s",
-                     parent_task,
-                     parent_task.completed)
         parent_task.put()
         parent_task = _get_task_from_memory(
             parent_task.domain_identifier(),
@@ -807,43 +803,75 @@ def get_all_open_tasks(domain):
     return db.run_in_transaction(txn)
 
 
-def get_all_assigned_tasks(domain, user):
+def get_all_assigned_tasks(domain, user, limit=50):
     """Returns all tasks that are assigned to |user| in |domain|.
 
     Args:
         domain: The domain identifier string
         user: An instance of the User model.
+        limit: The approximate maximum number of instances that
+            will be returned. The limit is approximate because extra
+            tasks might be fetched to return a full hierarchy.
 
     Returns:
-        A list of tasks instances that the given |user| is the assignee for.
-        At most 50 instances will be returned. The order will be on completion
-        status, with uncompleted tasks first. A secondary order is on time,
-        with newest tasks first.
+        A list of tasks instances that the given |user| is the assignee for
+        and has not yet completed. The tasks will returned in the order
+        of the hierarchy, and then on time, with newest tasks first.
     """
     def txn():
         query = user.assigned_tasks.ancestor(Domain.key_from_name(domain)).\
-            order('completed').\
+            filter('completed =', False).\
+            filter('number_of_subtasks =', 0).\
             order('-time')
-        return _group_tasks(query.fetch(50),
+        return _group_tasks(query.fetch(limit),
                             complete_hierarchy=True,
                             domain=domain)
     return db.run_in_transaction(txn)
 
 
-def get_all_tasks(domain):
+def get_all_completed_tasks(domain, user, limit=50):
+    """Returns all tasks that are assigned and completed by user.
+
+    Args:
+        domain: The domain identifier string
+        user: An instance of the User model.
+        limit: The approximate maximum number of instances that
+            will be returned. The limit is approximate because extra
+            tasks might be fetched to return a full hierarchy.
+
+    Returns:
+        A list of tasks instances that the given user is the assignee for
+        and has completed. The tasks will returned in the order
+        of the hierarchy, and then on time, with newest tasks first.
+    """
+    def txn():
+        query = user.assigned_tasks.ancestor(Domain.key_from_name(domain)).\
+            filter('completed =', True).\
+            filter('number_of_subtasks =', 0).\
+            order('-time')
+        return _group_tasks(query.fetch(limit),
+                            complete_hierarchy=True,
+                            domain=domain)
+    return db.run_in_transaction(txn)
+
+
+def get_all_tasks(domain, limit=50):
     """Returns all the tasks in the |domain|.
 
     Args:
         domain: The domain identifier string
+        limit: The approximate maximum number of instances that
+            will be returned. The limit is approximate because extra
+            tasks might be fetched to return a full hierarchy.
 
     Returns:
-        A list of at most 50 task instances of |domain|, ordered on task
+        A list of at most limit task instances of |domain|, ordered on task
         creation time, with the newest task first.
     """
     def txn():
         query = Task.all().ancestor(Domain.key_from_name(domain)).\
             order('-time')
-        return _group_tasks(query.fetch(50),
+        return _group_tasks(query.fetch(limit),
                             complete_hierarchy=True,
                             domain=domain)
     return db.run_in_transaction(txn)

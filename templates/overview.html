@@ -36,28 +36,17 @@ title of the task.
 <input type="submit" value="Create Task" />
 </form>
 <br>
-<h3>Your Tasks</h3>
-<form>
-  <table>
-    {% for task in your_tasks %}
-    {% include 'task-row.html' %}
-    {% endfor %}
-  </table>
-</form>
 
-<h3>Open Tasks</h3>
 <table>
-  {% for task in open_tasks %}
-  {% include 'task-row.html' %}
-  {% endfor %}
+  <tr>
+    <td><a href="/d/{{ domain_identifier }}/">Your Tasks</a></td>
+    <td><a href="/d/{{ domain_identifier }}/open">Open Tasks</a></td>
+    <td><a href="/d/{{ domain_identifier }}/all">All Tasks</a></td>
+  </tr>
 </table>
 
-<h3>All Tasks</h3>
-<table>
-  {% for task in all_tasks %}
-  {% include 'task-row.html' %}
-  {% endfor %}
-</table>
+{% block body %}
+{% endblock %}
 
 </body>
 </html>

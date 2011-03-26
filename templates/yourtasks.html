@@ -1,0 +1,27 @@
+{% extends "overview.html" %}
+
+{% block body %}
+
+<h3>Your Tasks</h3>
+<form>
+  <table>
+    {% for task in your_tasks %}
+    {% include 'task-row.html' %}
+    {% empty %}
+    <tr><td>You have no unfinished tasks</td></tr>
+    {% endfor %}
+  </table>
+</form>
+
+<h3>Tasks Completed By You</h3>
+<table>
+  <table>
+    {% for task in completed_tasks %}
+    {% include 'task-row.html' %}
+    {% empty %}
+    <tr><td>You have not completed any tasks</td></tr>
+    {% endfor %}
+  </table>
+</table>
+
+{% endblock %}

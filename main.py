@@ -80,6 +80,22 @@ def _task_template_values(tasks, user):
             for task in tasks]
 
 
+def render_template(file, template_values):
+    """
+    Renders the template specified through file passing the given
+    template_values.
+
+    Args:
+        file: relative path of the template file
+        template_values: dictionary of template values
+
+    Returns:
+        A string containing the rendered template.
+    """
+    path = os.path.join(os.path.dirname(__file__), file)
+    return template.render(path, template_values)
+
+
 class Landing(webapp.RequestHandler):
     """
     The main landing page. Shows the users domains and links to them.
@@ -101,10 +117,9 @@ class Landing(webapp.RequestHandler):
         self.response.out.write(template.render(path, template_values))
 
 
-class DomainOverview(webapp.RequestHandler):
+class YourTasksOverview(webapp.RequestHandler):
     """
-    Oveview of a domain for a current logged in user. Currently
-    shows all tasks for a user and all the available tasks.
+    Overview of all the tasks of the logged in user.
     """
     def get(self, domain_identifier):
         session = Session(writer='cookie',
@@ -113,9 +128,62 @@ class DomainOverview(webapp.RequestHandler):
         if not user:
             self.error(404)
             return
+
+        domain = api.get_domain(domain_identifier)
         your_tasks = api.get_all_assigned_tasks(domain_identifier, user)
+        completed_tasks = api.get_all_completed_tasks(domain_identifier,
+                                                      user)
+        template_values = {
+            'domain_name': domain.name,
+            'domain_identifier': domain_identifier,
+            'username': user.name,
+            'user_identifier': user.identifier(),
+            'messages': get_and_delete_messages(session),
+            'your_tasks': _task_template_values(your_tasks, user),
+            'completed_tasks': _task_template_values(completed_tasks, user)
+            }
+        self.response.out.write(render_template('templates/yourtasks.html',
+                                                template_values))
+
+
+class OpenTasksOverview(webapp.RequestHandler):
+    """
+    Overview of all open tasks.
+    """
+    def get(self, domain_identifier):
+        session = Session(writer='cookie',
+                          wsgiref_headers=self.response.headers)
+        user = api.get_and_validate_user(domain_identifier)
+        if not user:
+            self.error(404)
+            return
+
+        domain = api.get_domain(domain_identifier)
         open_tasks = api.get_all_open_tasks(domain_identifier)
-        all_tasks = api.get_all_tasks(domain_identifier)
+        template_values = {
+            'domain_name': domain.name,
+            'domain_identifier': domain_identifier,
+            'username': user.name,
+            'user_identifier': user.identifier(),
+            'messages': get_and_delete_messages(session),
+            'open_tasks': _task_template_values(open_tasks, user),
+            }
+        self.response.out.write(render_template('templates/opentasks.html',
+                                                template_values))
+
+
+class AllTasksOverview(webapp.RequestHandler):
+    """
+    Overview of all open tasks.
+    """
+    def get(self, domain_identifier):
+        session = Session(writer='cookie',
+                          wsgiref_headers=self.response.headers)
+        user = api.get_and_validate_user(domain_identifier)
+        if not user:
+            self.error(404)
+            return
+        all_tasks = api.get_all_tasks(domain_identifier, limit=200)
         domain = api.get_domain(domain_identifier)
         template_values = {
             'domain_name': domain.name,
@@ -124,12 +192,9 @@ class DomainOverview(webapp.RequestHandler):
             'user_identifier': user.identifier(),
             'messages': get_and_delete_messages(session),
             'all_tasks': _task_template_values(all_tasks, user),
-            'your_tasks': _task_template_values(your_tasks, user),
-            'open_tasks': _task_template_values(open_tasks, user),
             }
-        path = os.path.join(os.path.dirname(__file__),
-                            'templates/overview.html')
-        self.response.out.write(template.render(path, template_values))
+        self.response.out.write(render_template('templates/alltasks.html',
+                                                template_values))
 
 
 class TaskDetail(webapp.RequestHandler):
@@ -355,6 +420,8 @@ _VALID_DOMAIN_KEY_NAME = '[a-z][a-z0-9-]{1,100}'
 _VALID_TASK_KEY_NAME = '[a-z0-9-]{1,100}'
 
 _DOMAIN_URL = '/d/(%s)/?' % _VALID_DOMAIN_KEY_NAME
+_DOMAIN_ALL = '/d/(%s)/all/?' % _VALID_DOMAIN_KEY_NAME
+_DOMAIN_OPEN = '/d/(%s)/open/?' % _VALID_DOMAIN_KEY_NAME
 
 _TASK_URL = '%s/task/(%s)/?' % (_DOMAIN_URL, _VALID_TASK_KEY_NAME)
 
@@ -367,7 +434,9 @@ application = webapp.WSGIApplication([('/create-task', CreateTask),
                                       ('/assign-task', AssignTask),
                                       ('/move-task', MoveTask),
                                       ('/create-domain', CreateDomain),
-                                      (_DOMAIN_URL, DomainOverview),
+                                      (_DOMAIN_URL, YourTasksOverview),
+                                      (_DOMAIN_ALL, AllTasksOverview),
+                                      (_DOMAIN_OPEN, OpenTasksOverview),
                                       (_TASK_MOVE_URL, TaskMoveView),
                                       (_TASK_URL, TaskDetail),
                                       ('/', Landing)])

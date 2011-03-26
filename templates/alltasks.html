@@ -1,0 +1,15 @@
+{% extends "overview.html" %}
+
+{% block body %}
+
+<h3>All Tasks</h3>
+<table>
+  {% for task in all_tasks %}
+  {% include 'task-row.html' %}
+  {% endfor %}
+</table>
+
+{% endblock %}
+
+
+
