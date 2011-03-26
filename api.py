@@ -19,12 +19,52 @@ for now just return python objects. The transformation to JSON should
 be pretty straightforward.
 """
 import re
+import logging
 from google.appengine.ext import db
 from google.appengine.api import users
 from model import Domain, Task, TaskIndex, Context, User
 import workers
 
 VALID_DOMAIN_IDENTIFIER = r'[a-z][a-z0-9-]{1,100}'
+
+# A mapping of identifiers to their task instance
+_TASK_MEMORY_STORE = {}
+
+def _get_task_from_memory(domain_identifier, task_identifier):
+    """
+    This function operates the same as get_task() except it will first
+    look if the task instance is already stored in memory. This is
+    used to operate on the same set of task instances during a
+    transaction, as writes are not reflected during a transaction.
+
+    At the start of a transaction, the memory store should be flushed
+    to ensure there are no stale results through a call to
+    _flush_tasks_from_memory().
+
+    Args:
+        domain_identifier: The domain identifier string
+        task_identifier: The task identifier. Can be None.
+
+    Returns:
+        An instance of the Task model, or None if no such task exists
+        or the provided task_identifier was None.
+    """
+    if not task_identifier:
+        return None
+    # TODO(tijmen): When new tasks are created, they are not saved in
+    # memory.
+    key = "%s/%s" % (domain_identifier, task_identifier)
+    logging.info("KEY = %s" % key)
+    task = _TASK_MEMORY_STORE.get(key, None)
+    if not task:
+        task = get_task(domain_identifier, task_identifier)
+        _TASK_MEMORY_STORE[key] = task
+    return task
+
+# Flush all stored tasks in memory. Call before or at the start of a
+# transaction that operates on the task hierarchy
+def _flush_tasks_from_memory():
+    _TASK_MEMORY_STORE.clear()
 
 
 def member_of_domain(domain, user, *args):
@@ -265,10 +305,12 @@ def create_task(domain, user, description, assignee=None, parent_task=None):
         if assignee:
             task.baked_assignee_description = assignee.name
         task.put()
+        workers.UpdateTaskIndex.queue_worker(domain,
+                                             task.identifier(),
+                                             transactional=True)
         return task
 
     task = db.run_in_transaction(txn)
-    workers.UpdateTaskIndex.queue_task(domain, task.identifier())
     if assignee:
         assign_task(domain, task.identifier(), user, user)
     return task
@@ -317,6 +359,55 @@ def assign_task(domain_identifier, task_identifier, user, assignee):
     return db.run_in_transaction(txn)
 
 
+def _propagate_completion(task):
+    """
+    Propagate the effects of the completed field of the given task
+    to the parent tasks in the hierarchy.
+
+    If the task is set to complete, then this function will decrement
+    the number of incomplete subtasks of the parents and set their
+    completed status accordingly. Conversely, if the task is set to
+    incomplete, then this will set all parent tasks to incomplete as
+    well.
+
+    Note that care must be taken not to call this function more than
+    once every change, or the subtask count will become invalid. As
+    such, this function must be run in a transaction.
+
+    This function reads all tasks from the memory store, so ensure
+    that its contents are correct before calling this function.
+
+    Args:
+        task: An instance of the Task model
+
+    Raises:
+        ValueError: When not called as part of a transaction
+    """
+    if not db.is_in_transaction():
+        raise ValueError("Must be part of a transaction")
+
+    parent_task = _get_task_from_memory(task.domain_identifier(),
+                                        task.parent_task_identifier())
+    completed = task.completed
+    logging.info("Task %s completed: %s", task, completed)
+    while parent_task:
+        propagate = False
+        if completed:
+            parent_task.decrement_incomplete_subtasks()
+            propagate = parent_task.completed
+        else:              # Task went from complete to incomplete
+            parent_completed = parent_task.completed
+            parent_task.increment_incomplete_subtasks()
+            propagate = parent_task.completed ^ parent_completed
+        logging.info("Parent %s completed: %s",
+                     parent_task,
+                     parent_task.completed)
+        parent_task.put()
+        parent_task = _get_task_from_memory(
+            parent_task.domain_identifier(),
+            parent_task.parent_task_identifier()) if propagate else None
+
+
 def set_task_completed(domain, user, task_identifier, completed):
     """Sets the completion status of a task.
 
@@ -339,7 +430,8 @@ def set_task_completed(domain, user, task_identifier, completed):
             assignee of the task.
     """
     def txn():
-        task = get_task(domain, task_identifier)
+        _flush_tasks_from_memory()
+        task = _get_task_from_memory(domain, task_identifier)
         if not task or not task.atomic() or not can_complete_task(task, user):
             raise ValueError("Invalid task")
 
@@ -348,18 +440,171 @@ def set_task_completed(domain, user, task_identifier, completed):
 
         task.completed = completed
         task.put()
-        parent_task = task.parent_task
-        while parent_task:
-            propagate = False
-            if completed:
-                parent_task.decrement_incomplete_subtasks()
-                propagate = parent_task.completed
-            else:              # Task went from complete to incomplete
-                parent_completed = parent_task.completed
-                parent_task.increment_incomplete_subtasks()
-                propagate = parent_task.completed ^ parent_completed
-            parent_task.put()
-            parent_task = parent_task.parent_task if propagate else None
+        _propagate_completion(task)
+        return task
+
+    return db.run_in_transaction(txn)
+
+
+def _check_for_cycle(task, new_parent):
+    """
+    Check if assigning new_parent as the parent of task would result
+    in a cycle. This function must be run as part of a transaction
+    to get consistent results.
+
+    Args:
+        task: An instance of the Task model
+        new_parent: An instance of the Task model, or None, in which
+            case the function will always return True.
+
+    Returns:
+        False if the assignment would result in a cycle. True if the
+        assignment is allowed.
+
+    Raises:
+        ValueError: If used outside of a transaction or the tasks
+            are not in the same domain.
+    """
+    if not task.domain_identifier() == new_parent.domain_identifier():
+        raise ValueError("Tasks must be in the same domain")
+    if not db.is_in_transaction():
+        raise ValueError("Must be part of a transaction")
+    visited = set([task.identifier()])
+    while new_parent:
+        if new_parent.identifier() in visited:
+            return False
+        visited.add(new_parent.identifier())
+        parent_identifier = new_parent.parent_task_identifier()
+        if parent_identifier:
+            new_parent = _get_task_from_memory(task.domain_identifier(),
+                                               parent_identifier)
+        else:
+            new_parent = None
+    return True
+
+def _update_task_levels(task, level):
+    """
+    Updates all level property of the given task and propagates this
+    to all subtasks in the hierarchy as wel. The updated tasks will be
+    stored in the datastore.
+
+    This function has to be called as part of a transaction.
+
+    Args:
+        task: An instance of the Task model
+        level: The new level of the task
+
+    Raises:
+        ValueError: If not called as part of a transaction
+    """
+    if not db.is_in_transaction():
+        raise ValueError("Must be part of a transaction")
+    if task.level == level:
+        return
+
+    difference = level - task.level
+    task.level = level
+    task.put()
+    query = TaskIndex.all(keys_only=True).\
+        ancestor(task.domain_key()).\
+        filter('hierarchy = ', task.identifier())
+
+    subtasks = Task.get(key.parent() for key in query)
+    for subtask in subtasks:
+        subtask.level = subtask.level + difference
+    db.put(subtasks)
+
+
+def change_task_parent(domain_identifier,
+                       user,
+                       task_identifier,
+                       new_parent_identifier):
+    """Changes the parent of the given task.
+
+    Changes the parent of the task to new_parent. The operation can
+    only be performed by the user who originally created the task. No
+    cycles can be created in this way. If the operation succeeds, then
+    the TaskIndex and AssigneeIndex will be updated.
+
+    Args:
+        domain_identifier: The domain identifier string
+        user: An instance of the User model
+        task_identifier: An identifier of the task that will have its
+            parent changed
+        new_parent_identifier: The identifier for the new parent.
+            Can be None, in which case the task will end up as a root task.
+
+    Returns:
+        An instance of the Task model, which is the task with his
+        new parent.
+
+    Raises:
+        ValueError: The task does not exist, or the user is not
+        allowed to change the task.
+    """
+    if not member_of_domain(domain_identifier, user):
+        raise ValueError("User is not a member of the domain")
+
+    def remove_task_from_parent(task, parent):
+        parent.number_of_subtasks = parent.number_of_subtasks - 1
+        if not task.completed:
+            parent.decrement_incomplete_subtasks()
+        parent_was_completed = parent.completed
+        if parent.completed and parent.number_of_subtasks == 0:
+            # Removed the last subtask that made the parent completed
+            parent.completed = False
+        if (not parent.completed
+            and parent.remaining_subtasks == 0
+            and parent.number_of_subtasks > 0):
+            # Removed the only subtask that was not completed
+            parent.completed = True
+        if parent.completed ^ parent_was_completed:
+            _propagate_completion(parent)
+
+    def add_task_to_parent(task, parent):
+        parent.number_of_subtasks = parent.number_of_subtasks + 1
+        parent_was_completed = parent.completed
+        if not task.completed:
+            parent.increment_incomplete_subtasks()
+        if parent.remaining_subtasks == 0:
+            parent.completed = True
+        if parent.completed ^ parent_was_completed:
+            _propagate_completion(parent)
+
+    def txn():
+        _flush_tasks_from_memory()
+        task = _get_task_from_memory(domain_identifier,
+                                     task_identifier)
+        new_parent = _get_task_from_memory(domain_identifier,
+                                           new_parent_identifier)
+        if not task.user_identifier() == user.identifier():
+            raise ValueError("User did not create task")
+        if not _check_for_cycle(task, new_parent):
+            raise ValueError("Cycle detected")
+
+        parent = _get_task_from_memory(domain_identifier,
+                                       task.parent_task_identifier())
+        if parent:
+            remove_task_from_parent(task, parent)
+            workers.UpdateAssigneeIndex.queue_worker(
+                parent,
+                remove_assignee=task.assignee_identifier())
+            parent.put()
+
+        task.parent_task = new_parent
+        level = 0
+        if new_parent:
+            add_task_to_parent(task, new_parent)
+            level = new_parent.level + 1
+            new_parent.put()
+            workers.UpdateAssigneeIndex.queue_worker(
+                new_parent,
+                add_assignee=task.assignee_identifier())
+        _update_task_levels(task, level)
+        workers.UpdateTaskIndex.queue_worker(domain_identifier,
+                                             task.identifier(),
+                                             transactional=True)
+        task.put()
         return task
 
     return db.run_in_transaction(txn)

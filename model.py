@@ -165,6 +165,13 @@ class Task(db.Model):
         """Returns a string with the task identifier"""
         return str(self.key().id_or_name())
 
+    def parent_task_key(self):
+        """
+        Returns the key of the |parent_task| without derefercing the
+        property.
+        """
+        return Task.parent_task.get_value_for_datastore(self)
+
     def parent_task_identifier(self):
         """
         Returns a string identifier of the parent task of this
@@ -176,6 +183,12 @@ class Task(db.Model):
             return str(parent_key.id_or_name())
         else:
             return None
+
+    def domain_key(self):
+        """
+        Returns the key of the domain parent entity of this task.
+        """
+        return self.parent_key()
 
     def domain_identifier(self):
         """
@@ -207,6 +220,11 @@ class Task(db.Model):
         """
         return Task.user.get_value_for_datastore(self)
 
+    def user_identifier(self):
+        """Returns the identifier of the user that has created this task."""
+        key = self.user_key()
+        return key.name()
+
     def assignee_key(self):
         """
         Returns the key of the |assignee| without dereferencing the property.
@@ -221,13 +239,6 @@ class Task(db.Model):
         """
         key = self.assignee_key()
         return key.name() if key else None
-
-    def parent_task_key(self):
-        """
-        Returns the key of the |parent_task| without derefercing the
-        property.
-        """
-        return Task.parent_task.get_value_for_datastore(self)
 
     def increment_incomplete_subtasks(self):
         """
