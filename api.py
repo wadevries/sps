@@ -85,6 +85,25 @@ def member_of_domain(domain, user, *args):
             return False
     return True
 
+def admin_of_domain(domain_identifier, user):
+    """Returns true iff the user is member and admin of the domain.
+
+    Args:
+        domain: The domain identifier
+        user: Instance of the user model
+
+    Returns:
+        True if the user is a member and an admin of the domain.
+    """
+    if not member_of_domain(domain_identifier, user):
+        return False
+    query = Domain.all(keys_only=True).\
+        filter('__key__ =', Domain.key_from_name(domain_identifier)).\
+        filter('admins =', user.identifier())
+    if not query.fetch(1):
+        return False
+    return True
+
 
 def get_user():
     """Gets the currently logged in user.
@@ -541,6 +560,8 @@ def change_task_parent(domain_identifier,
     if not member_of_domain(domain_identifier, user):
         raise ValueError("User is not a member of the domain")
 
+    user_is_admin = admin_of_domain(domain_identifier, user)
+
     def remove_task_from_parent(task, parent):
         parent.number_of_subtasks = parent.number_of_subtasks - 1
         if not task.completed:
@@ -573,7 +594,8 @@ def change_task_parent(domain_identifier,
                                      task_identifier)
         new_parent = _get_task_from_memory(domain_identifier,
                                            new_parent_identifier)
-        if not task.user_identifier() == user.identifier():
+        if (not task.user_identifier() == user.identifier()
+            and not user_is_admin):
             raise ValueError("User did not create task")
         if not _check_for_cycle(task, new_parent):
             raise ValueError("Cycle detected")
