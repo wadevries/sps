@@ -54,16 +54,16 @@ def _get_task_from_memory(domain_identifier, task_identifier):
     # TODO(tijmen): When new tasks are created, they are not saved in
     # memory.
     key = "%s/%s" % (domain_identifier, task_identifier)
-    logging.info("KEY = %s" % key)
     task = _TASK_MEMORY_STORE.get(key, None)
     if not task:
         task = get_task(domain_identifier, task_identifier)
         _TASK_MEMORY_STORE[key] = task
     return task
 
-# Flush all stored tasks in memory. Call before or at the start of a
-# transaction that operates on the task hierarchy
+
 def _flush_tasks_from_memory():
+    """ Flush all stored tasks in memory. Call before or at the start of a
+    transaction that operates on the task hierarchy."""
     _TASK_MEMORY_STORE.clear()
 
 
@@ -85,8 +85,9 @@ def member_of_domain(domain, user, *args):
             return False
     return True
 
+
 def admin_of_domain(domain_identifier, user):
-    """Returns true iff the user is member and admin of the domain.
+    """Returns true iff the user is a member and admin of the domain.
 
     Args:
         domain: The domain identifier
@@ -124,6 +125,7 @@ def get_user():
         user = User(key_name=guser.user_id(), name=guser.nickname())
         user.put()
     return user
+
 
 def get_user_from_identifier(user_identifier):
     """Returns the user corresponding to the given identifier"""
@@ -217,6 +219,7 @@ def can_complete_task(task, user):
     """
     return task.atomic() and task.assignee_key() == user.key()
 
+
 def can_assign_to_self(task, user):
     """Returns true if a user can assign the task to himself.
 
@@ -306,11 +309,8 @@ def create_task(domain, user, description, assignee=None, parent_task=None):
         raise ValueError("Assignee and user domain do not match")
 
     def txn():
-        super_task = None
-        if parent_task:
-            super_task = get_task(domain, parent_task)
-            if not super_task:
-                raise ValueError("Parent task does not exist")
+        _flush_tasks_from_memory()
+        super_task = _get_task_from_memory(domain, parent_task)
         task = Task(parent=Domain.key_from_name(domain),
                     description=description,
                     user=user,
@@ -318,9 +318,12 @@ def create_task(domain, user, description, assignee=None, parent_task=None):
                     parent_task=super_task,
                     level=super_task.level + 1 if super_task else 0)
         if super_task:
+            completed = super_task.completed
             super_task.number_of_subtasks = super_task.number_of_subtasks + 1
             super_task.increment_incomplete_subtasks()
             super_task.put()
+            if completed ^ super_task.completed:
+                _propagate_completion(super_task)
         if assignee:
             task.baked_assignee_description = assignee.name
         task.put()
