@@ -27,7 +27,7 @@ logged in as: <b> {{ user_name|escape }} </b>
 </ul>
 {% endif %}
 
-<h3>{{ task_title|escape }}</h3>
+<h2>{{ task_title|escape }}</h2>
 {% if parent_identifier %}
 <p>Subtask of <a href="/d/{{ domain_identifier }}/task/{{ parent_identifier }}">{{ parent_title }}</a></p>
 {% endif %}
