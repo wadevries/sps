@@ -1,7 +1,7 @@
 <tr>
   <td class="checkbox">
     <form>
-      {% for i in task.levels %}&nbsp;&nbsp;{% endfor %}<input type="checkbox" name="completed" value="{{ task.id }}" {% if task.completed %} checked {% endif %}{% if not task.can_complete %}disabled{% endif %}>
+      {% for i in task.levels %}&nbsp;&middot;{% endfor %}<input type="checkbox" name="completed" value="{{ task.id }}" {% if task.completed %} checked {% endif %}{% if not task.can_complete %}disabled{% endif %}>
       </form>
     </td>
   <td class="task-title">
