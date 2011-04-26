@@ -237,10 +237,7 @@ class UpdateAssigneeIndex(webapp.RequestHandler):
         Raises:
             ValueError: If this function is called outside a transaction.
         """
-        if not add_assignee and not remove_assignee:
-            return
-        if (add_assignee and remove_assignee
-            and add_assignee.identifier() == remove_assignee.identifier()):
+        if add_assignee == remove_assignee:
             return
 
         if not db.is_in_transaction():
