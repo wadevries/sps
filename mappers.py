@@ -21,13 +21,25 @@ from model import Domain, Task, User, TaskIndex
 import workers
 import api
 
+def clear_all_indices(task):
+    """
+    Clears all old indices, must be called before all
+    tasks indices are rebuild.
 
-def rebuild_indices(task):
-    """Clears all TaskIndices and rebuilds them."""
+    This because to sequence number of all tasks must be
+    zeroed before the indices start to rebuild.
+    """
     task_index = TaskIndex.get_by_key_name(task.identifier(),
                                            parent=task)
     if task_index:
         db.delete(task_index)
+    task.assignee_index_sequence = 0
+    yield op.db.Put(task)
+
+def rebuild_indices(task):
+    """
+    Rebuilds all TaskIndices. The old indices MUST be cleared first.
+    """
 
     def txn():
         workers.UpdateTaskIndex.queue_worker(task.domain_identifier(),
@@ -35,7 +47,6 @@ def rebuild_indices(task):
                                              transactional=True)
         instance = api.get_task(task.domain_identifier(),
                                 task.identifier())
-        instance.assignee_index_sequence = 0
         if instance:
             workers.UpdateAssigneeIndex.queue_worker(
                 instance,
