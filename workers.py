@@ -64,7 +64,7 @@ class UpdateTaskIndex(webapp.RequestHandler):
                 if not parent_index:
                     logging.error("Missing index for parent task '%s/%s'",
                                   domain_identifier, parent_identifier)
-                    self.error(500) # Retry
+                    self.error(400) # Retry
                     return None, False
                 parent_hierarchy = parent_index.hierarchy
 
@@ -175,7 +175,7 @@ class UpdateAssigneeIndex(webapp.RequestHandler):
                 logging.warning("Worker out of sequence: %d (%d required)",
                                 index.sequence,
                                 sequence)
-                self.error(500)
+                self.error(400)
                 return task, False
             if index.sequence > sequence: # passed us, must be a duplicate
                 return task, False
