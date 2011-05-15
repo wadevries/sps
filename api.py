@@ -959,14 +959,10 @@ def get_assigned_toplevel_tasks(domain, user, limit=50):
         filter('level = ', 0).\
         filter('assignees = ', user.identifier())
     fetched = query.fetch(limit)
-    tasks = (Task.get([key.parent() for key in fetched]))
-
-    def task_cmp(t1, t2):
-        if t1.completed != t2.completed:
-            return cmp(t1.completed, t2.completed)
-        return -cmp(t1.time, t2.time)
-
-    tasks.sort(cmp=task_cmp)
+    tasks = [task
+             for task in Task.get([key.parent() for key in fetched])
+             if task]
+    _sort_tasks(tasks)
     return tasks
 
 
@@ -985,10 +981,12 @@ def get_all_toplevel_tasks(domain, limit=50):
         ancestor(Domain.key_from_name(domain)).\
         filter('level = ', 0)
     fetched = query.fetch(limit)
-    tasks = (Task.get([key.parent() for key in fetched]))
-
+    tasks = [task
+             for task in Task.get([key.parent() for key in fetched])
+             if task]
     _sort_tasks(tasks)
     return tasks
+
 
 def get_all_tasks(domain, limit=50):
     """Returns all the tasks in the |domain|, ordered in a hierarchy.
