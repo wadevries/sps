@@ -266,6 +266,12 @@ class Task(db.Model):
         """Returns true if this task has no parent task"""
         return not self.parent_task_key()
 
+    def open(self):
+        """Returns true if this task is an open task."""
+        return (self.atomic() and
+                not self.completed and
+                not self.assignee_identifier())
+
     def invariant(self):
         """
         Checks the task state. Returns False if the task state is incorrect.

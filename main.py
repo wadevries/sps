@@ -130,7 +130,7 @@ class YourTasksOverview(webapp.RequestHandler):
             return
 
         domain = api.get_domain(domain_identifier)
-        your_tasks = api.get_all_assigned_tasks(domain_identifier, user)
+        your_tasks = api.get_assigned_toplevel_tasks(domain_identifier, user)
         template_values = {
             'domain_name': domain.name,
             'domain_identifier': domain_identifier,
@@ -180,7 +180,7 @@ class AllTasksOverview(webapp.RequestHandler):
         if not user:
             self.error(404)
             return
-        all_tasks = api.get_all_tasks(domain_identifier, limit=200)
+        all_tasks = api.get_all_toplevel_tasks(domain_identifier, limit=200)
         domain = api.get_domain(domain_identifier)
         template_values = {
             'domain_name': domain.name,

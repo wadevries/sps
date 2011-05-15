@@ -844,25 +844,30 @@ def get_open_subtasks(task, limit=50, depth_limit=None):
     # As open tasks cannot be queried yet through the TaskIndex,
     # all tasks are retrieved and then filtered in memory.
     task_level = task.level
-    tasks = []
-    for depth in range(depth_limit):
-        query = TaskIndex.all(keys_only=True).\
-            ancestor(Domain.key_from_name(task.domain_identifier())).\
-            filter('level = ', task_level + depth + 1).\
-            filter('hierarchy = ', task.identifier())
-        fetched = query.fetch(limit)
-        tasks.extend(Task.get([key.parent() for key in fetched]))
-        limit = limit - len(fetched)
-        if not fetched or limit < 1:
-            break               # stop
-    tasks = [task for task in tasks
-             if task.assignee == None and not task.completed]
-    _sort_tasks(tasks)
-    grouped = _group_tasks(tasks,
-                           complete_hierarchy=True,
-                           min_task_level=task_level + 1,
-                           domain=task.domain_identifier())
-    return grouped
+    domain_identifier = task.domain_identifier()
+    task_identifier = task.identifier()
+    def txn():
+        tasks = []
+        task_limit = limit
+        for depth in range(depth_limit):
+            query = TaskIndex.all(keys_only=True).\
+                ancestor(Domain.key_from_name(domain_identifier)).\
+                filter('level = ', task_level + depth + 1).\
+                filter('hierarchy = ', task_identifier)
+            fetched = query.fetch(task_limit)
+            tasks.extend(Task.get([key.parent() for key in fetched]))
+            task_limit = task_limit - len(fetched)
+            if not fetched or limit < 1:
+                break               # stop
+        tasks = [task for task in tasks if task.open()]
+        _sort_tasks(tasks)
+        grouped = _group_tasks(tasks,
+                               complete_hierarchy=True,
+                               min_task_level=task_level + 1,
+                               domain=task.domain_identifier())
+        return grouped
+
+    return db.run_in_transaction(txn)
 
 def get_assigned_subtasks(task, user, limit=50, depth_limit=None):
     """
@@ -934,7 +939,7 @@ def get_all_open_tasks(domain):
     return db.run_in_transaction(txn)
 
 
-def get_all_assigned_tasks(domain, user, limit=50):
+def get_assigned_toplevel_tasks(domain, user, limit=50):
     """Returns all top level tasks, which has a subtasks that is assigned
     to |user| in |domain|. The subtask can be arbitrarily deep in the
     hierarchy.
@@ -965,7 +970,7 @@ def get_all_assigned_tasks(domain, user, limit=50):
     return tasks
 
 
-def get_all_tasks(domain, limit=50):
+def get_all_toplevel_tasks(domain, limit=50):
     """Returns all the top level tasks in the |domain|.
 
     Args:
@@ -984,3 +989,22 @@ def get_all_tasks(domain, limit=50):
 
     _sort_tasks(tasks)
     return tasks
+
+def get_all_tasks(domain, limit=50):
+    """Returns all the tasks in the |domain|, ordered in a hierarchy.
+
+    Args:
+        domain: The domain identifier string
+        limit: The maximum number of tasks that will be returned.
+
+    Returns:
+        A list of at most limit task instances of |domain|, ordered on task
+        creation time, with the newest task first.
+    """
+    def txn():
+        query = Task.all().ancestor(Domain.key_from_name(domain)).\
+            order('-time')
+        return _group_tasks(query.fetch(limit),
+                            complete_hierarchy=True,
+                            domain=domain)
+    return db.run_in_transaction(txn)
