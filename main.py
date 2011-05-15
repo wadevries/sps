@@ -201,6 +201,7 @@ class TaskDetail(webapp.RequestHandler):
     def get(self, domain_identifier, task_identifier):
         task = api.get_task(domain_identifier, task_identifier)
         user = api.get_and_validate_user(domain_identifier)
+        view = self.request.get('view')
         if not task or not user:
             self.error(404)
             return
@@ -208,7 +209,16 @@ class TaskDetail(webapp.RequestHandler):
                           wsgiref_headers=self.response.headers)
         user = api.get_user()
         domain = api.get_domain(domain_identifier)
-        subtasks = api.get_all_subtasks(domain_identifier, task)
+        if view == 'all':
+            subtasks = api.get_all_subtasks(task)
+            no_subtasks_description = "No subtasks for this task."
+        elif view == 'open':
+            subtasks = api.get_open_subtasks(task)
+            no_subtasks_description = "No open subtasks for this task."
+        else:  # 'yours' or None
+            subtasks = api.get_assigned_subtasks(task, user)
+            no_subtasks_description = "No subtasks assigned to you."
+
         parent_task = task.parent_task
         parent_identifier = parent_task.identifier() if parent_task else ""
         parent_title = parent_task.title() if parent_task else ""
@@ -226,6 +236,7 @@ class TaskDetail(webapp.RequestHandler):
             'subtasks': _task_template_values(subtasks, user),
             'parent_identifier': parent_identifier,
             'parent_title': parent_title,
+            'no_subtasks_description': no_subtasks_description,
             }
         path = os.path.join(os.path.dirname(__file__),
                             'templates/taskdetail.html')

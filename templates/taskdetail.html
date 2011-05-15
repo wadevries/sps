@@ -52,12 +52,22 @@ Description:<br>
 {% endif %}
 
 <hr>
+
+<table>
+  <tr>
+    <td><a href="/d/{{ domain_identifier }}/task/{{ task_identifier }}">Your Subtasks</a></td>
+    <td><a href="/d/{{ domain_identifier }}/task/{{ task_identifier }}?view=open">Open Subtasks</a></td>
+    <td><a href="/d/{{ domain_identifier }}/task/{{ task_identifier }}?view=all">All Subtasks</a></td>
+  </tr>
+</table>
+
+<hr>
 <h3>Subtasks</h3>
 <table>
   {% for task in subtasks %}
   {% include 'task-row.html' %}
   {% empty %}
-  <p>No subtasks for this task</p>
+  <p>{{ no_subtasks_description }}</p>
   {% endfor %}
 </table>
 

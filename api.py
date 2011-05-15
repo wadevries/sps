@@ -672,7 +672,10 @@ def create_domain(domain, domain_title, user):
     return new_domain
 
 
-def _group_tasks(tasks, complete_hierarchy=False, domain=None):
+def _group_tasks(tasks,
+                 complete_hierarchy=False,
+                 domain=None,
+                 min_task_level=0):
     """
     Reorders the list of tasks such that supertasks are listed before
     their subtasks.
@@ -690,6 +693,10 @@ def _group_tasks(tasks, complete_hierarchy=False, domain=None):
         complete_hierarchy: If set to True, then the parent tasks will
             be fetched to complete the hierarchy.
         domain: The domain identifier string. Required if
+            complete_hierarchy is set to True.
+        min_task_level: The minimum level of the tasks that will be
+            returned as part of the hierarchy. Tasks with a level lower
+            than this level will not be returned, nor fetched when
             complete_hierarchy is set to True.
 
     Returns:
@@ -732,7 +739,7 @@ def _group_tasks(tasks, complete_hierarchy=False, domain=None):
             task = get_task(domain, task_identifier)
             if task:
                 index[task_identifier] = task
-        if not task:
+        if not task or task.level < min_task_level:
             return None
 
         tree = trees.get(task)
@@ -752,7 +759,26 @@ def _group_tasks(tasks, complete_hierarchy=False, domain=None):
     return output
 
 
-def get_all_subtasks(domain, task, limit=50, depth_limit=None):
+def _sort_tasks(tasks):
+    """
+    Sorts the list of Task instances, in place, on their completion
+    state and then on time, newest tasks first.
+
+    Args:
+        tasks: A list of Task model instances
+
+    Returns:
+        Nothing. The list is sorted in place.
+    """
+    def task_cmp(t1, t2):
+        if t1.completed != t2.completed:
+            return cmp(t1.completed, t2.completed)
+        return -cmp(t1.time, t2.time)
+
+    tasks.sort(cmp=task_cmp)
+
+
+def get_all_subtasks(task, limit=50, depth_limit=None):
     """
     Returns a list of all subtasks of the given task, in the order
     as a pre-order traversal through the task hierarchy.
@@ -761,7 +787,6 @@ def get_all_subtasks(domain, task, limit=50, depth_limit=None):
     hierarchy.
 
     Args:
-        domain: The domain identifier string.
         task: An instance of the Task model.
         limit: The maximum number of subtasks to return.
         depth_limit: The maximum depth of subtasks in the task
@@ -783,7 +808,7 @@ def get_all_subtasks(domain, task, limit=50, depth_limit=None):
     tasks = []
     for depth in range(depth_limit):
         query = TaskIndex.all(keys_only=True).\
-            ancestor(Domain.key_from_name(domain)).\
+            ancestor(Domain.key_from_name(task.domain_identifier())).\
             filter('level = ', task_level + depth + 1).\
             filter('hierarchy = ', task.identifier())
         fetched = query.fetch(limit)
@@ -792,14 +817,95 @@ def get_all_subtasks(domain, task, limit=50, depth_limit=None):
         if not fetched or limit < 1:
             break               # stop
 
-    # Sort the tasks on completion status and then on time, as this is
-    # not possible in the query.
-    def task_cmp(t1, t2):
-        if t1.completed != t2.completed:
-            return cmp(t1.completed, t2.completed)
-        return -cmp(t1.time, t2.time)
+    _sort_tasks(tasks)
+    return _group_tasks(tasks)
 
-    tasks.sort(cmp=task_cmp)
+def get_open_subtasks(task, limit=50, depth_limit=None):
+    """
+    Returns all subtasks of task that are not yet completed and not
+    assigned to anyone.
+
+    Args:
+        task: An instance of the Task model.
+        limit: The maximum number of subtasks to return.
+        depth_limit: The maximum depth of subtasks in the task
+            hierarchy.
+
+    Returns:
+        A list of Task model instances that are not yet completed
+        and do not have an assignee. All tasks are subtasks of the
+        given tasks.
+    """
+    if not depth_limit:
+        depth_limit = 5000
+    if depth_limit < 0 or limit < 0:
+        raise ValueError("Invalid limits")
+
+    # As open tasks cannot be queried yet through the TaskIndex,
+    # all tasks are retrieved and then filtered in memory.
+    task_level = task.level
+    tasks = []
+    for depth in range(depth_limit):
+        query = TaskIndex.all(keys_only=True).\
+            ancestor(Domain.key_from_name(task.domain_identifier())).\
+            filter('level = ', task_level + depth + 1).\
+            filter('hierarchy = ', task.identifier())
+        fetched = query.fetch(limit)
+        tasks.extend(Task.get([key.parent() for key in fetched]))
+        limit = limit - len(fetched)
+        if not fetched or limit < 1:
+            break               # stop
+    tasks = [task for task in tasks
+             if task.assignee == None and not task.completed]
+    _sort_tasks(tasks)
+    grouped = _group_tasks(tasks,
+                           complete_hierarchy=True,
+                           min_task_level=task_level + 1,
+                           domain=task.domain_identifier())
+    return grouped
+
+def get_assigned_subtasks(task, user, limit=50, depth_limit=None):
+    """
+    Returns a list of all subtasks of the given task, that are assigned
+    to the given user.
+
+    This function will perform one query for each level of the subtask
+    hierarchy.
+
+    Args:
+        task: An instance of the Task model.
+        user: An instance of the user model.
+        limit: The maximum number of subtasks to return.
+        depth_limit: The maximum depth of subtasks in the task
+            hierarchy.
+
+    Returns:
+        A list with all subtasks of the given task.
+
+    Raises:
+        ValueError: The depth_limit or limit are not positive integers
+    """
+    if not depth_limit:
+        #  ListProperties cannot contain more than 5000 elements anyway
+        depth_limit = 5000
+    if depth_limit < 0 or limit < 0:
+        raise ValueError("Invalid limits")
+
+    task_level = task.level
+    tasks = []
+    for depth in range(depth_limit):
+        query = TaskIndex.all(keys_only=True).\
+            ancestor(Domain.key_from_name(task.domain_identifier())).\
+            filter('level = ', task_level + depth + 1).\
+            filter('hierarchy = ', task.identifier()).\
+            filter('assignees = ', user.identifier())
+        fetched = query.fetch(limit)
+        tasks.extend(Task.get([key.parent() for key in fetched]))
+        limit = limit - len(fetched)
+        if not fetched or limit < 1:
+            break               # stop
+
+    _sort_tasks(tasks)
     return _group_tasks(tasks)
 
 
@@ -876,10 +982,5 @@ def get_all_tasks(domain, limit=50):
     fetched = query.fetch(limit)
     tasks = (Task.get([key.parent() for key in fetched]))
 
-    def task_cmp(t1, t2):
-        if t1.completed != t2.completed:
-            return cmp(t1.completed, t2.completed)
-        return -cmp(t1.time, t2.time)
-
-    tasks.sort(cmp=task_cmp)
+    _sort_tasks(tasks)
     return tasks
