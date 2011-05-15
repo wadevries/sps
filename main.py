@@ -388,7 +388,7 @@ class AssignTask(webapp.RequestHandler):
                           wsgiref_headers=self.response.headers)
         add_message(session, "Task '%s' assigned to '%s'" %
                                 (task.title(), assignee.name))
-        self.redirect('/d/%s/' % domain)
+        self.redirect(self.request.headers.get('referer'))
 
 
 class CreateDomain(webapp.RequestHandler):
