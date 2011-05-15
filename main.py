@@ -131,8 +131,6 @@ class YourTasksOverview(webapp.RequestHandler):
 
         domain = api.get_domain(domain_identifier)
         your_tasks = api.get_all_assigned_tasks(domain_identifier, user)
-        completed_tasks = api.get_all_completed_tasks(domain_identifier,
-                                                      user)
         template_values = {
             'domain_name': domain.name,
             'domain_identifier': domain_identifier,
@@ -140,7 +138,6 @@ class YourTasksOverview(webapp.RequestHandler):
             'user_identifier': user.identifier(),
             'messages': get_and_delete_messages(session),
             'your_tasks': _task_template_values(your_tasks, user),
-            'completed_tasks': _task_template_values(completed_tasks, user)
             }
         self.response.out.write(render_template('templates/yourtasks.html',
                                                 template_values))

@@ -1,26 +1,8 @@
 mapreduce:
-- name: Migrate tasks
+- name: Rebuild all Task indices
   mapper:
     input_reader: mapreduce.input_readers.DatastoreInputReader
-    handler: mappers.migrate_task
-    params:
-    - name: entity_kind
-      default: model.Task
-    - name: processing_rate
-      default: 1
-- name: Clear assignee indices
-  mapper:
-    input_reader: mapreduce.input_readers.DatastoreInputReader
-    handler: mappers.clear_assignee_index
-    params:
-    - name: entity_kind
-      default: model.Task
-    - name: processing_rate
-      default: 1
-- name: Create assignee indices
-  mapper:
-    input_reader: mapreduce.input_readers.DatastoreInputReader
-    handler: mappers.create_assignee_index
+    handler: mappers.rebuild_indices
     params:
     - name: entity_kind
       default: model.Task

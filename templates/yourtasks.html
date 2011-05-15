@@ -13,13 +13,4 @@
   </table>
 </form>
 
-<h3>Tasks Completed By You</h3>
-<table>
-    {% for task in completed_tasks %}
-    {% include 'task-row.html' %}
-    {% empty %}
-    <tr><td>You have not completed any tasks</td></tr>
-    {% endfor %}
-</table>
-
 {% endblock %}

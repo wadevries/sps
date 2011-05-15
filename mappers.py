@@ -17,30 +17,26 @@ Mappers, currently only used for schema migration etc.
 from mapreduce import operation as op, context
 from google.appengine.ext import db
 
-from model import Domain, Task, User, AssigneeIndex
+from model import Domain, Task, User, TaskIndex
 import workers
 import api
 
-def clear_assignee_index(task):
-    index = AssigneeIndex.get_by_key_name(task.identifier(),
-                                          parent=task)
-    if index:
-        db.delete(index)
-    task.assignee_index_sequence = 0
-    yield op.db.Put(task)
 
-def migrate_task(task):
-    workers.BakeAssigneeDescription.queue_worker(task)
+def rebuild_indices(task):
+    """Clears all TaskIndices and rebuilds them."""
+    task_index = TaskIndex.get_by_key_name(task.identifier(),
+                                           parent=task)
+    if task_index:
+        db.delete(task_index)
 
-def create_assignee_index(task):
     def txn():
-        index = AssigneeIndex.get_by_key_name(task.identifier(),
-                                              parent=task)
-        if index:
-            return
+        workers.UpdateTaskIndex.queue_worker(task.domain_identifier(),
+                                             task.identifier(),
+                                             transactional=True)
         instance = api.get_task(task.domain_identifier(),
                                 task.identifier())
-        if instance.assignee_key():
+        instance.assignee_index_sequence = 0
+        if instance:
             workers.UpdateAssigneeIndex.queue_worker(
                 instance,
                 add_assignee=instance.assignee_identifier())

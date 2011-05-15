@@ -288,6 +288,9 @@ class TaskIndex(db.Model):
     The TaskIndex stores the entire task identifier hierarchy of each
     task, who is the parent entity of the index. These indices help
     with certain task hierarchy queries.
+
+    Additionally, it stores all the assignees to that task. This
+    can also be used for a query.
     """
     # An ordered list of all the parent identifiers of the task.
     # Empty if the task has no parents.
@@ -295,13 +298,9 @@ class TaskIndex(db.Model):
     # The level in the hierarchy of this index. Equivalent to the
     # number of items in the hierarchy list.
     level = db.IntegerProperty(required=True, default=0)
-
-
-class AssigneeIndex(db.Model):
-    """
-    The AssigneeIndex stores all identifiers of the users that are
-    assigned to a task. Each AssigneeIndex has a parent Task entity.
-    """
+    #
+    # Assignee members
+    #
     # An ordered list of identifiers of all users that are
     # participating in this task, because they are assigned to an
     # atomic subtask.

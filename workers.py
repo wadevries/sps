@@ -26,7 +26,7 @@ from google.appengine.ext.webapp.util import run_wsgi_app
 import simplejson as json
 
 import api
-from model import Domain, Task, TaskIndex, AssigneeIndex, Context, User
+from model import Domain, Task, TaskIndex, Context, User
 
 class UpdateTaskIndex(webapp.RequestHandler):
     """
@@ -157,10 +157,10 @@ class UpdateAssigneeIndex(webapp.RequestHandler):
                 reference_counts[add_assignee] = count + 1
 
         def _get_index(task):
-            index = AssigneeIndex.get_by_key_name(task.identifier(),
-                                                  parent=task)
+            index = TaskIndex.get_by_key_name(task.identifier(),
+                                              parent=task)
             if not index:
-                index = AssigneeIndex(key_name=task.identifier(), parent=task)
+                index = TaskIndex(key_name=task.identifier(), parent=task)
             return index
 
         def txn():
@@ -172,6 +172,9 @@ class UpdateAssigneeIndex(webapp.RequestHandler):
 
             index = _get_index(task)
             if index.sequence < sequence: # Not our time yet, retry later
+                logging.warning("Worker out of sequence: %d (%d required)",
+                                index.sequence,
+                                sequence)
                 self.error(500)
                 return task, False
             if index.sequence > sequence: # passed us, must be a duplicate
@@ -274,8 +277,8 @@ class BakeAssigneeDescription(webapp.RequestHandler):
         if not task:
             logging.error("No task '%s/%s'", domain_identifier, task_identifier)
             return
-        index = AssigneeIndex.get_by_key_name(task.identifier(),
-                                              parent=task)
+        index = TaskIndex.get_by_key_name(task.identifier(),
+                                          parent=task)
         if not index:
             logging.error("No assignee index for task '%s'", task)
             return

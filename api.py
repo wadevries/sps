@@ -829,74 +829,57 @@ def get_all_open_tasks(domain):
 
 
 def get_all_assigned_tasks(domain, user, limit=50):
-    """Returns all tasks that are assigned to |user| in |domain|.
+    """Returns all top level tasks, which has a subtasks that is assigned
+    to |user| in |domain|. The subtask can be arbitrarily deep in the
+    hierarchy.
 
     Args:
         domain: The domain identifier string
-        user: An instance of the User model.
-        limit: The approximate maximum number of instances that
-            will be returned. The limit is approximate because extra
-            tasks might be fetched to return a full hierarchy.
+        user: An instance of the User model
+        limit: The maximum number of results that will be returned
 
     Returns:
         A list of tasks instances that the given |user| is the assignee for
         and has not yet completed. The tasks will returned in the order
         of the hierarchy, and then on time, with newest tasks first.
     """
-    def txn():
-        query = user.assigned_tasks.ancestor(Domain.key_from_name(domain)).\
-            filter('completed =', False).\
-            filter('number_of_subtasks =', 0).\
-            order('-time')
-        return _group_tasks(query.fetch(limit),
-                            complete_hierarchy=True,
-                            domain=domain)
-    return db.run_in_transaction(txn)
+    query = TaskIndex.all(keys_only=True).\
+        ancestor(Domain.key_from_name(domain)).\
+        filter('level = ', 0).\
+        filter('assignees = ', user.identifier())
+    fetched = query.fetch(limit)
+    tasks = (Task.get([key.parent() for key in fetched]))
 
+    def task_cmp(t1, t2):
+        if t1.completed != t2.completed:
+            return cmp(t1.completed, t2.completed)
+        return -cmp(t1.time, t2.time)
 
-def get_all_completed_tasks(domain, user, limit=50):
-    """Returns all tasks that are assigned and completed by user.
-
-    Args:
-        domain: The domain identifier string
-        user: An instance of the User model.
-        limit: The approximate maximum number of instances that
-            will be returned. The limit is approximate because extra
-            tasks might be fetched to return a full hierarchy.
-
-    Returns:
-        A list of tasks instances that the given user is the assignee for
-        and has completed. The tasks will returned in the order
-        of the hierarchy, and then on time, with newest tasks first.
-    """
-    def txn():
-        query = user.assigned_tasks.ancestor(Domain.key_from_name(domain)).\
-            filter('completed =', True).\
-            filter('number_of_subtasks =', 0).\
-            order('-time')
-        return _group_tasks(query.fetch(limit),
-                            complete_hierarchy=True,
-                            domain=domain)
-    return db.run_in_transaction(txn)
+    tasks.sort(cmp=task_cmp)
+    return tasks
 
 
 def get_all_tasks(domain, limit=50):
-    """Returns all the tasks in the |domain|.
+    """Returns all the top level tasks in the |domain|.
 
     Args:
         domain: The domain identifier string
-        limit: The approximate maximum number of instances that
-            will be returned. The limit is approximate because extra
-            tasks might be fetched to return a full hierarchy.
+        limit: The maximum number of tasks that will be returned.
 
     Returns:
         A list of at most limit task instances of |domain|, ordered on task
         creation time, with the newest task first.
     """
-    def txn():
-        query = Task.all().ancestor(Domain.key_from_name(domain)).\
-            order('-time')
-        return _group_tasks(query.fetch(limit),
-                            complete_hierarchy=True,
-                            domain=domain)
-    return db.run_in_transaction(txn)
+    query = TaskIndex.all(keys_only=True).\
+        ancestor(Domain.key_from_name(domain)).\
+        filter('level = ', 0)
+    fetched = query.fetch(limit)
+    tasks = (Task.get([key.parent() for key in fetched]))
+
+    def task_cmp(t1, t2):
+        if t1.completed != t2.completed:
+            return cmp(t1.completed, t2.completed)
+        return -cmp(t1.time, t2.time)
+
+    tasks.sort(cmp=task_cmp)
+    return tasks
