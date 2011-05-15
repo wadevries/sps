@@ -249,7 +249,7 @@ class UpdateAssigneeIndex(webapp.RequestHandler):
         sequence = task.assignee_index_sequence
         task.assignee_index_sequence = sequence + 1
         task.put()
-        queue = taskqueue.Queue('update-assignee-index')
+        queue = taskqueue.Queue('update-task-index')
         params = { 'task': task.identifier(),
                    'domain': task.domain_identifier(),
                    'sequence': sequence }
