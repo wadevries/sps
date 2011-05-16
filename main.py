@@ -210,13 +210,13 @@ class TaskDetail(webapp.RequestHandler):
         user = api.get_user()
         domain = api.get_domain(domain_identifier)
         if view == 'all':
-            subtasks = api.get_all_subtasks(task)
+            subtasks = api.get_all_subtasks(task, depth_limit=1)
             no_subtasks_description = "No subtasks for this task."
         elif view == 'open':
             subtasks = api.get_open_subtasks(task)
             no_subtasks_description = "No open subtasks for this task."
         else:  # 'yours' or None
-            subtasks = api.get_assigned_subtasks(task, user)
+            subtasks = api.get_assigned_subtasks(task, user, depth_limit=1)
             no_subtasks_description = "No subtasks assigned to you."
 
         parent_task = task.parent_task

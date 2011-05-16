@@ -847,8 +847,10 @@ def get_open_subtasks(task, limit=50, depth_limit=None):
     domain_identifier = task.domain_identifier()
     task_identifier = task.identifier()
     def txn():
+        # Temporarily limit increase, as its too easy to miss
+        # an open task if the limit is low...
+        task_limit = limit + 100
         tasks = []
-        task_limit = limit
         for depth in range(depth_limit):
             query = TaskIndex.all(keys_only=True).\
                 ancestor(Domain.key_from_name(domain_identifier)).\
