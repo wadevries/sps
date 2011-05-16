@@ -272,19 +272,6 @@ class Task(db.Model):
                 not self.completed and
                 not self.assignee_identifier())
 
-    def invariant(self):
-        """
-        Checks the task state. Returns False if the task state is incorrect.
-
-        Potentially slow function, do not call in production code.
-        """
-        subtask_count = self.subtasks.ancestor(self.parent_key()).count()
-        if subtask_count != self.number_of_subtasks:
-            return False
-        if completed and number_of_incomplete_subtasks != 0:
-            return False
-        return True
-
     def __str__(self):
         return "%s/%s" % (self.domain_identifier(), self.identifier())
 
