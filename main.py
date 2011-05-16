@@ -134,7 +134,7 @@ class YourTasksOverview(webapp.RequestHandler):
         template_values = {
             'domain_name': domain.name,
             'domain_identifier': domain_identifier,
-            'username': user.name,
+            'user_name': user.name,
             'user_identifier': user.identifier(),
             'messages': get_and_delete_messages(session),
             'your_tasks': _task_template_values(your_tasks, user),
@@ -160,7 +160,7 @@ class OpenTasksOverview(webapp.RequestHandler):
         template_values = {
             'domain_name': domain.name,
             'domain_identifier': domain_identifier,
-            'username': user.name,
+            'user_name': user.name,
             'user_identifier': user.identifier(),
             'messages': get_and_delete_messages(session),
             'open_tasks': _task_template_values(open_tasks, user),
@@ -185,7 +185,7 @@ class AllTasksOverview(webapp.RequestHandler):
         template_values = {
             'domain_name': domain.name,
             'domain_identifier': domain_identifier,
-            'username': user.name,
+            'user_name': user.name,
             'user_identifier': user.identifier(),
             'messages': get_and_delete_messages(session),
             'all_tasks': _task_template_values(all_tasks, user),
@@ -219,7 +219,7 @@ class TaskDetail(webapp.RequestHandler):
             no_subtasks_description = "No open subtasks for this task."
         else:  # 'yours' or None
             subtasks = api.get_assigned_subtasks(task, user, depth_limit=1)
-            subtasks_heading = "Subtasks Assigned to You"
+            subtasks_heading = "Subtasks of '%s' Assigned to You" % task.title()
             no_subtasks_description = "No subtasks assigned to you."
 
         parent_task = task.parent_task
@@ -236,6 +236,7 @@ class TaskDetail(webapp.RequestHandler):
             'task_assignee': assignee_description(task),
             'task_identifier': task.identifier(),
             'task_can_assign_to_self': api.can_assign_to_self(task, user),
+            'task_number_of_subtasks': task.number_of_subtasks,
             'subtasks': _task_template_values(subtasks, user),
             'parent_identifier': parent_identifier,
             'parent_title': parent_title,
@@ -262,7 +263,7 @@ class TaskMoveView(webapp.RequestHandler):
                           wsgiref_headers=self.response.headers)
         user = api.get_user()
         domain = api.get_domain(domain_identifier)
-        tasks = api.get_all_tasks(domain_identifier)
+        tasks = api.get_all_tasks(domain_identifier, limit=200)
 
         template_values = {
             'domain_name': domain.name,

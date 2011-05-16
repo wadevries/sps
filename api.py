@@ -866,7 +866,7 @@ def get_open_subtasks(task, limit=50, depth_limit=None):
         grouped = _group_tasks(tasks,
                                complete_hierarchy=True,
                                min_task_level=task_level + 1,
-                               domain=task.domain_identifier())
+                               domain=domain_identifier)
         return grouped
 
     return db.run_in_transaction(txn)

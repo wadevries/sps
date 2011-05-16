@@ -14,17 +14,8 @@
   </script>
 </head>
 <body>
-<h1><a href="/" class='plain' title="Back to overview">{{ domain_name|escape }}</a></h1>
-logged in as: <b> {{ username|escape }} </b>
-<hr>
 
-{% if messages %}
-<ul>
-{% for message in messages %}
-<li>{{ message }}</li>
-{% endfor %}
-</ul>
-{% endif %}
+{% include 'sps-header.html' %}
 
 <h3>New Task</h3>
 <form action="/create-task" method="post">
@@ -37,6 +28,7 @@ title of the task.
 </form>
 <br>
 
+<hr>
 <table>
   <tr>
     <td><a href="/d/{{ domain_identifier }}/">Your Tasks</a></td>
@@ -44,6 +36,7 @@ title of the task.
     <td><a href="/d/{{ domain_identifier }}/all">All Tasks</a></td>
   </tr>
 </table>
+<hr>
 
 {% block body %}
 {% endblock %}

@@ -15,21 +15,14 @@
   </script>
 </head>
 <body>
-<h1><a href="/d/{{ domain_identifier }}/" class='plain' title="Back to {{ domain_name|escape }}">{{ domain_name }}</a></h1>
-logged in as: <b> {{ user_name|escape }} </b>
-<hr>
 
-{% if messages %}
-<ul>
-{% for message in messages %}
-<li>{{ message }}</li>
-{% endfor %}
-</ul>
-{% endif %}
+{% include 'sps-header.html' %}
 
 <h2>{{ task_title|escape }}</h2>
 {% if parent_identifier %}
 <p>Subtask of <a href="/d/{{ domain_identifier }}/task/{{ parent_identifier }}">{{ parent_title }}</a></p>
+{% else %}
+<p>Back to <a href="/d/{{ domain_identifier }}">task overview</a></p>
 {% endif %}
 {% if task_description %}
 Description:<br>
@@ -53,6 +46,7 @@ Description:<br>
 
 <hr>
 
+{% if task_number_of_subtasks > 0 %}
 <table>
   <tr>
     <td><a href="/d/{{ domain_identifier }}/task/{{ task_identifier }}">Your Subtasks</a></td>
@@ -70,6 +64,8 @@ Description:<br>
   <p>{{ no_subtasks_description }}</p>
   {% endfor %}
 </table>
+
+{% endif %}
 
 <h3>New Subtask</h3>
 <form action="/create-task" method="post">
