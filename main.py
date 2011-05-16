@@ -211,12 +211,15 @@ class TaskDetail(webapp.RequestHandler):
         domain = api.get_domain(domain_identifier)
         if view == 'all':
             subtasks = api.get_all_subtasks(task, depth_limit=1)
+            subtasks_heading = "All Subtasks of '%s'" % task.title()
             no_subtasks_description = "No subtasks for this task."
         elif view == 'open':
             subtasks = api.get_open_subtasks(task)
+            subtasks_heading = "Open Subtasks of '%s'" % task.title()
             no_subtasks_description = "No open subtasks for this task."
         else:  # 'yours' or None
             subtasks = api.get_assigned_subtasks(task, user, depth_limit=1)
+            subtasks_heading = "Subtasks Assigned to You"
             no_subtasks_description = "No subtasks assigned to you."
 
         parent_task = task.parent_task
@@ -236,6 +239,7 @@ class TaskDetail(webapp.RequestHandler):
             'subtasks': _task_template_values(subtasks, user),
             'parent_identifier': parent_identifier,
             'parent_title': parent_title,
+            'subtasks_heading': subtasks_heading,
             'no_subtasks_description': no_subtasks_description,
             }
         path = os.path.join(os.path.dirname(__file__),

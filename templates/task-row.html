@@ -6,8 +6,13 @@
     </td>
   <td class="task-title">
     <a href="/d/{{ domain_identifier }}/task/{{ task.id }}">
-      {{ task.title|escape }} {% if task.num_subtasks %}({{ task.num_subtasks }} subtask{{ task.num_subtasks|pluralize }}){% endif %}
+      {{ task.title|escape }}
     </a>
+  </td>
+  <td class="task-detail">
+    {% if task.num_subtasks %}
+    {{ task.num_subtasks }} subtask{{ task.num_subtasks|pluralize }}
+    {% endif %}
   </td>
   {% if task.can_assign_to_self %}
   <td class="assign-button">
