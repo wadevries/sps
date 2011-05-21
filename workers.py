@@ -294,7 +294,7 @@ class BakeAssigneeDescription(webapp.RequestHandler):
             description = "%s, %s" % (user0.name, user1.name)
         elif len(assignees) > 2:
             user = api.get_user_from_identifier(assignees[0])
-            description = "%s and %d others" % (user, len(assignees) - 1)
+            description = "%s and %d others" % (user.name, len(assignees) - 1)
         task.baked_assignee_description = description
         task.put()
 
