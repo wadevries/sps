@@ -17,7 +17,8 @@ Model classes used in the planner.
 """
 
 from google.appengine.ext import db
-
+import simplejson as json
+import aetycoon
 
 class Domain(db.Model):
     """
@@ -91,10 +92,50 @@ class User(db.Model):
         return User.default_context.get_value_for_datastore(self)
 
 
+# PicklePropert from the aetycoon repository:
+# (https://github.com/Arachnid/aetycoon/blob/master/__init__.py)
+class _PickleProperty(db.Property):
+  """A property for storing complex objects in the datastore in pickled form.
+
+  Example usage:
+
+  >>> class PickleModel(db.Model):
+  ...   data = PickleProperty()
+
+  >>> model = PickleModel()
+  >>> model.data = {"foo": "bar"}
+  >>> model.data
+  {'foo': 'bar'}
+  >>> model.put() # doctest: +ELLIPSIS
+  datastore_types.Key.from_path(u'PickleModel', ...)
+
+  >>> model2 = PickleModel.all().get()
+  >>> model2.data
+  {'foo': 'bar'}
+  """
+
+  data_type = db.Blob
+
+  def get_value_for_datastore(self, model_instance):
+    value = self.__get__(model_instance, model_instance.__class__)
+    if value is not None:
+      return db.Blob(pickle.dumps(value))
+
+  def make_value_from_datastore(self, value):
+    if value is not None:
+      return pickle.loads(str(value))
+
+  def default_value(self):
+    """If possible, copy the value passed in the default= keyword argument.
+    This prevents mutable objects such as dictionaries from being shared across
+    instances."""
+    return copy.copy(self.default)
+
+
 class Task(db.Model):
     """
     A record for every task. Tasks can form a hierarchy. Tasks have
-    single description. The title of a tasks is defined as the first
+    single description. The title of a task is defined as the first
     line of this description.
 
     All tasks and their related components such as statuses are stored
@@ -110,56 +151,87 @@ class Task(db.Model):
     Tasks do not have a specific keyname, but use the auto-generated
     numeric ids.
 
-    The hierarchy features in appengine for keys are not used to store
-    the hierachy of tasks, as it is very likely that the task
-    hierarchy changes.
+    Some properties are replicated in the TaskIndex model. Each
+    Task has a corresponding TaskIndex, which is used to perform
+    some queries.
+
+    All functions specified in this class do not perform any RPC
+    calls, and can be used freely.
+
+    The logic that is used to compute the derived properties is
+    located in workers.py.
     """
+    #
+    # FIXED PROPERTIES
+    #
+    # Description of the task. The first line of the description
+    # is used as the title of the task.
     description = db.TextProperty(required=True)
     # Link to a parent task. Tasks that do not have a parent are all
     # considered to be in the 'backlog'.
     parent_task = db.SelfReferenceProperty(default=None,
                                            collection_name="subtasks")
-
     # TODO(tijmen): Add statuses
 
-    # The user who created the task. At this moment also the one
-    # who has to complete it.
+    # The user who created the task.
     user = db.ReferenceProperty(reference_class=User,
                                 required=True,
-                                collection_name="tasks")
+                                collection_name="created_tasks")
     # The user that has been assigned to complete this task. Can be
-    # None. This value must be ignored if a task is a composite task!
+    # None. If this task is a composite task, then this value can
+    # be ignored.
     assignee = db.ReferenceProperty(default=None,
                                     reference_class=User,
                                     collection_name="assigned_tasks")
     context = db.ReferenceProperty(reference_class=Context,
                                    collection_name="tasks")
-    # Whether or not the task is completed.
-    completed = db.BooleanProperty(default=False)
-    # A list of tasks that this tasks depends on to be completed
-    # first. The list contains the key names of those tasks.
-    dependent_on = db.StringListProperty(default=[])
-    # The estimated time that this task will take to complete. If this
-    # tasks has subtasks, then the duration becomes the sum of those
-    # tasks.
-    duration = db.TimeProperty()
+    # A list of tasks identifiers that this tasks depends on to be
+    # completed first.
+    dependencies = db.StringListProperty(default=[])
     # Time of creation of the task. Just for reference.
     time = db.DateTimeProperty(auto_now_add=True)
-    # Explicit tracking of the number of subtasks of this task. If
-    # the count is 0, then this Task is an atomatic task.
-    number_of_subtasks = db.IntegerProperty(default=0)
-    # Tracking of the number of incomplete subtasks.
-    remaining_subtasks = db.IntegerProperty(default=0, indexed=False)
+    # The estimated time that this task will take to complete.
+    duration = db.TimeProperty()
+    # Whether or not the task is completed. This value is set by
+    # the user. To get the value of the completed status in the
+    # hierarchy, check the derived_completed field.
+    completed = db.BooleanProperty(default=False, indexed=False)
+    #
+    # DERIVED PROPERTIES
+    #
+    # The derived field of the completed flag. If this task is an
+    # atomic task, it is set to the value of |completed|. Otherwise
+    # it is set to true iff all subtasks are completed.
+    derived_completed = db.BooleanProperty(default=False)
+    # The size of the tree hierarchy formed by this tasks and all
+    # its supertasks. If the task is an atomic task, the size is 1,
+    # otherwise it is the sum of all its subtasks, plus one.
+    derived_size = db.IntegerProperty(default=1, indexed=False)
+    # The number of direct subtasks of this task. If this count is 0,
+    # then this task is an atomic task.
+    derived_number_of_subtasks = db.IntegerProperty(default=0)
+    # The number of incomplete subtasks of this task. If this
+    # value is 0, and this task is a composite task (it has subtasks),
+    # then this task is completed.
+    derived_remaining_subtasks = db.IntegerProperty(default=0, indexed=False)
     # Level of this task in hierarchy. A task without a parent task
-    # has level 0.
-    level = db.IntegerProperty(default=0)
-    # The next available sequence number for an assignee update. Each
-    # time an update is queued this number must be incremented.
-    assignee_index_sequence = db.IntegerProperty(default=0, indexed=False)
-    # Pre-baked assignee description, updated through workers when
-    # the assignees change.
-    baked_assignee_description = db.StringProperty(default="", indexed=False)
-
+    # has level 0, for all other tasks it is defined as the level as
+    # its parent plus one.
+    derived_level = db.IntegerProperty(default=0, indexed=False)
+    # A dictionary of assignees of this (composite) task.  The
+    # assignees of this list form the union of all the assignees of
+    # the atomic subtasks of this task.
+    #
+    # The keys of each entry is the assignee identifier, which is also
+    # stored as value in the record.
+    #
+    # Each assignee consists of a record with the following fields:
+    #  id: a string with the identifier of the assignee
+    #  completed: an integer describing the number of atomic subtasks
+    #     completed by this assignee.
+    #  all: an integer describing the total number of atomic subtasks
+    #     assigned to this assignee.
+    derived_assignees = aetycoon.PickleProperty(default={})
 
     def identifier(self):
         """Returns a string with the task identifier"""
@@ -197,7 +269,8 @@ class Task(db.Model):
         return self.parent_key().name()
 
     def title(self):
-        """Returns the title of the task.
+        """
+        Returns the title of the task.
 
         The title is the first line in the description.
         """
@@ -240,27 +313,26 @@ class Task(db.Model):
         key = self.assignee_key()
         return key.name() if key else None
 
-    def increment_incomplete_subtasks(self):
+    def assignee_description(self):
         """
-        Increments the incompleted subtasks count and sets the completed
-        flag to False.
+        Returns a string describing the assignees of this task. If
+        this task has no assignees, then this function returns the
+        empty string.
         """
-        self.remaining_subtasks = self.remaining_subtasks + 1
-        self.completed = False
+        # TODO(tijmen): Make this a proper string for lots of
+        # assignees, ie:  tijmen, el and X others..
+        return "TEMP"
+#        return ','.join(assignee[name] for assignee in self.assignees)
 
-    def decrement_incomplete_subtasks(self):
+    def is_completed(self):
         """
-        Decrements the number of incompleted subtasks by one. If this value
-        reaches 0, then the completed flag will be set to True.
+        Returns true iff this task is completed.
         """
-        assert self.remaining_subtasks > 0
-        self.remaining_subtasks = self.remaining_subtasks - 1
-        if not self.remaining_subtasks:
-            self.completed = True
+        return self.derived_completed
 
     def atomic(self):
         """Returns true if this task is an atomic task"""
-        return self.number_of_subtasks == 0
+        return self.derived_number_of_subtasks == 0
 
     def root(self):
         """Returns true if this task has no parent task"""
@@ -269,8 +341,16 @@ class Task(db.Model):
     def open(self):
         """Returns true if this task is an open task."""
         return (self.atomic() and
-                not self.completed and
+                not self.is_completed() and
                 not self.assignee_identifier())
+
+    def hierarchy_level(self):
+        """Returns the level of this task in the task hierarchy."""
+        return self.derived_level
+
+    def number_of_subtasks(self):
+        """Returns the number of subtasks of this task."""
+        return self.derived_number_of_subtasks
 
     def __str__(self):
         return "%s/%s" % (self.domain_identifier(), self.identifier())
@@ -279,32 +359,25 @@ class Task(db.Model):
 class TaskIndex(db.Model):
     """
     The TaskIndex stores the entire task identifier hierarchy of each
-    task, who is the parent entity of the index. These indices help
+    task, which is the parent entity of the index. These indices help
     with certain task hierarchy queries.
 
     Additionally, it stores all the assignees to that task. This
     can also be used for a query.
+
+    The key_name of each TaskIndex is set to the identifier of the
+    Task that is the index of.
     """
     # An ordered list of all the parent identifiers of the task.
     # Empty if the task has no parents.
-    hierarchy = db.StringListProperty(required=True)
+    hierarchy = db.StringListProperty(required=True, default=[])
     # The level in the hierarchy of this index. Equivalent to the
     # number of items in the hierarchy list.
-    level = db.IntegerProperty(required=True, default=0)
-    #
-    # Assignee members
-    #
+    level = aetycoon.LengthProperty(hierarchy)
     # An ordered list of identifiers of all users that are
     # participating in this task, because they are assigned to an
     # atomic subtask.
     assignees = db.StringListProperty(default=[])
     # The size of the assignees list
-    assignee_count = db.IntegerProperty(default=0)
-    # A JSON encoded dictionary that stores the number of tasks a user
-    # has assigned to him in subtasks of this task. This value is then
-    # used to decide whether to propagate the changes upwards in the
-    # tree.
-    reference_counts = db.TextProperty(default="{}")
-    # A sequence number to ensure idempotency of the update operation
-    # of the reference counts.
-    sequence = db.IntegerProperty(default=0, indexed=False)
+    assignee_count = aetycoon.LengthProperty(assignees)
+

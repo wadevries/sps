@@ -39,6 +39,15 @@ indexes:
 - kind: Task
   ancestor: yes
   properties:
+  - name: assignee
+  - name: derived_completed
+  - name: derived_number_of_subtasks
+  - name: time
+    direction: desc
+
+- kind: Task
+  ancestor: yes
+  properties:
   - name: completed
   - name: parent_task
   - name: time

@@ -52,11 +52,6 @@ def get_and_delete_messages(session):
     return messages
 
 
-def assignee_description(task):
-    """Returns a string describing the assignee of a task"""
-    return task.baked_assignee_description
-
-
 def _task_template_values(tasks, user):
     """
     Returns a list of dictionaries containing the template values for
@@ -69,13 +64,13 @@ def _task_template_values(tasks, user):
     Returns a list of dictionaries for each task, in the same order.
     """
     return [{ 'title': task.title(),
-              'levels': range(task.level),
-              'completed': task.completed,
+              'levels': range(task.hierarchy_level()),
+              'completed': task.is_completed(),
               'is_assigned': task.assignee_key() != None,
               'can_assign_to_self': api.can_assign_to_self(task, user),
-              'assignee_description': assignee_description(task),
+              'assignee_description': task.assignee_description(),
               'can_complete': api.can_complete_task(task, user),
-              'num_subtasks': task.number_of_subtasks,
+              'num_subtasks': task.number_of_subtasks(),
               'id': task.identifier() }
             for task in tasks]
 
@@ -233,7 +228,7 @@ class TaskDetail(webapp.RequestHandler):
             'messages': get_and_delete_messages(session),
             'task_title' : task.title(),
             'task_description': task.description_body(),
-            'task_assignee': assignee_description(task),
+            'task_assignee': task.assignee_description(),
             'task_identifier': task.identifier(),
             'task_can_assign_to_self': api.can_assign_to_self(task, user),
             'task_number_of_subtasks': task.number_of_subtasks,
@@ -274,7 +269,7 @@ class TaskMoveView(webapp.RequestHandler):
             'task_title' : task.title(),
             'task_description': task.description_body(),
             'task_identifier': task.identifier(),
-            'task_num_subtasks': task.number_of_subtasks,
+            'task_num_subtasks': task.number_of_subtasks(),
             'tasks': _task_template_values(tasks, user),
             }
         path = os.path.join(os.path.dirname(__file__),
@@ -312,7 +307,7 @@ class CreateTask(webapp.RequestHandler):
                                user,
                                description,
                                assignee=assignee,
-                               parent_task=parent_identifier)
+                               parent_task_identifier=parent_identifier)
         add_message(self.session, "Task '%s' created" % task.title())
         if parent_identifier:
             self.redirect('/d/%s/task/%s' % (domain, parent_identifier))

@@ -1,4 +1,4 @@
 queue:
-- name: update-task-index
+- name: update-task-hierarchy
   rate: 20/s
   max_concurrent_requests: 1

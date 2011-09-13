@@ -1,0 +1,13 @@
+<h3>
+  <a href="/" class='plain' title="Back to overview">{{ domain_name|escape }}</a>
+</h3>
+logged in as: <b> {{ user_name|escape }} </b>
+<hr>
+
+{% if messages %}
+<ul>
+{% for message in messages %}
+<li>{{ message }}</li>
+{% endfor %}
+</ul>
+{% endif %}

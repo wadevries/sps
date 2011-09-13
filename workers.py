@@ -13,8 +13,9 @@
 #  limitations under the License.
 
 """
-This file contains all task handler for work that can be performed in
-the background.
+This file contains all taskqueue handler for work that can be
+performed in the background. Tasks in the taskqueue sense are called
+'workers', to prevent any confusing with Tasks in the SPS sense.
 """
 import os
 import logging
@@ -28,88 +29,89 @@ import simplejson as json
 import api
 from model import Domain, Task, TaskIndex, Context, User
 
-class UpdateTaskIndex(webapp.RequestHandler):
+
+class UpdateTaskCompletion(webapp.RequestHandler):
     """
-    Handler to update or create the TaskIndex for a single task.
-    If the index is updated, then tasks are queued to update all
-    the subtasks of the task as well.
+    Updates all derived properties of the tasks in a hierarchy.
+    This worker starts from a given task and then propagates upwards
+    all the derived properties that depend on properties lower in the
+    hierarchy (ie. those properties whose initial values are set as
+    atomic tasks).
+
+    To update the properties that start from a root task, use the
+    other worker.
+
+    This post requests takes two arguments, a domain and a task
+    identifier. The update touches approximately b * d tasks, where
+    b is the average branching factor in the task hierarchy and
+    d the depth of the starting task in the hierarchy.
+
+    This operation is idempotent.
     """
     def post(self):
         domain_identifier = self.request.get('domain')
+        domain_key = Domain.key_from_name(domain_identifier)
         task_identifier = self.request.get('task')
-        force_update = self.request.get('force_update')
 
         def txn():
-            # Returns (task, changed) tuple, where changed is set if
-            # the task index was updated.
             task = api.get_task(domain_identifier, task_identifier)
             if not task:
                 logging.error("Task '%s/%s' does not exist",
                               domain_identifier, task_identifier)
-                return None, False
+                return
             index = TaskIndex.get_by_key_name(task_identifier, parent=task)
-            new_index = False
             if not index:
-                index = TaskIndex(parent=task,
-                                  key_name=task_identifier,
-                                  hierarchy=[],
-                                  level=0)
-                new_index = True
-            parent_identifier = task.parent_task_identifier()
-            parent_hierarchy = []
-            if parent_identifier:
-                parent_key = task.parent_task_key()
-                parent_index = TaskIndex.get_by_key_name(parent_identifier,
-                                                         parent=parent_key)
-                if not parent_index:
-                    logging.error("Missing index for parent task '%s/%s'",
-                                  domain_identifier, parent_identifier)
-                    self.error(400) # Retry
-                    return None, False
-                parent_hierarchy = parent_index.hierarchy
+                index = TaskIndex(parent=task, key_name=task_identifier)
 
-            hierarchy = parent_hierarchy
-            if parent_identifier:
-                hierarchy.append(parent_identifier)
-            if (force_update
-                or new_index
-                or set(index.hierarchy) ^ set(hierarchy)):
-                index.hierarchy = hierarchy
-                index.level = len(hierarchy)
-                index.put()
-                return task, True
-            return task, False
+            # Get all subtasks. The ancestor queries are strongly
+            # consistent, so when propagating upwards through the
+            # hierarchy the changes are reflected.
+            subtasks = list(Task.all().
+                            ancestor(domain_key).
+                            filter('parent_task =', task.key()))
 
-        task, changed = db.run_in_transaction(txn)
-        if not changed:
-            logging.info("Task '%s/%s' index is unchanged",
-                         domain_identifier, task_identifier)
-            return
+            if not subtasks:    # atomic task
+                logging.info("No subtasks found for atomic task '%s'" % task)
+                task.derived_completed = task.completed
+                task.derived_size = 1
+                task.derived_number_of_subtasks = 0
+                task.derived_remaining_subtasks = 0
+                # TODO(tijmen): derived_assignees
+                if task.assignee_identifier():
+                    index.assignees = [task.assignee_identifier()]
+#                     task.derived_assignees[task.assignee_identifier()] = {
+#                         'id': task.assignee_identifier(),
+#                         'completed_st': 0,
+#                         'all_st': 0
+#                         }
+            else:               # composite task
+                logging.info("Task '%s' has %d subtasks" % (task, len(subtasks)))
+                task.derived_completed = all((t.derived_completed
+                                              for t in subtasks))
+                task.derived_size = 1 + sum(t.derived_size for t in subtasks)
+                task.derived_number_of_subtasks = len(subtasks)
+                task.derived_remaining_subtasks = len(list(
+                    t for t in subtasks if not t.derived_completed))
+            task.put()
+            index.put()
+            # Propagate further upwards
+            if task.parent_task_identifier():
+                UpdateTaskCompletion.enqueue(domain_identifier,
+                                             task.parent_task_identifier(),
+                                             transactional=True)
 
-        query = Task.all(keys_only=True).\
-            ancestor(Domain.key_from_name(domain_identifier)).\
-            filter('parent_task =', task.key())
-        for subtask_key in query:
-            subtask_identifier = subtask_key.id_or_name()
-            # TODO(tijmen): Batch queue tasks
-            UpdateTaskIndex.queue_worker(domain_identifier,
-                                         subtask_identifier,
-                                         force_update)
+        db.run_in_transaction(txn)
+
 
     @staticmethod
-    def queue_worker(domain_identifier,
-                     task_identifier,
-                     force=False,
-                     transactional=False):
+    def enqueue(domain_identifier, task_identifier, transactional=False):
         """
-        Queues a new task to update the task index of the task with
-        the given identifier.
+        Queues a new worker to update the task hierarchy of the task
+        with the given identifier.
 
         Args:
             domain_identifier: The domain identifier string
             task_identifier: The task identifier string
-            force: If set to true, the entire hierarchy will be updated,
-                even if there are no changes.
             transactional: If set to true, then the task will be added
                 as a transactional task.
 
@@ -118,199 +120,120 @@ class UpdateTaskIndex(webapp.RequestHandler):
                  function is not called as part of a transaction.
         """
         if transactional and not db.is_in_transaction():
-            raise ValueError("Requires a transaction")
+            raise ValueError("Adding a transactional worker requires a"
+                             " transaction")
 
-        queue = taskqueue.Queue('update-task-index')
-        task = taskqueue.Task(url='/workers/update-task-index',
+        queue = taskqueue.Queue('update-task-hierarchy')
+        task = taskqueue.Task(url='/workers/update-task-completion',
                               params={ 'task': task_identifier,
-                                       'domain': domain_identifier,
-                                       'force_update': force})
+                                       'domain': domain_identifier })
         try:
             queue.add(task, transactional=transactional)
         except taskqueue.TransientError:
             queue.add(task, transactional=transactional)
 
 
-class UpdateAssigneeIndex(webapp.RequestHandler):
+
+class UpdateTaskHierarchy(webapp.RequestHandler):
     """
-    Updates or creates the AssigneeIndex for a given task. Only atomic
-    tasks used starting point of this worker. If required, the assignee
-    index of parent tasks will be updated as well.
+    Updates the task level and hierarchy fields of a task hierarchy.
+    The update starts at the given task, and propagates all the way
+    downwards in the entire tree.
+
+    This post request takes two arguments, a domain and a task identifier.
+    The update touches all the tasks in the hierarchy.
+
+    This operation is idempotent.
     """
     def post(self):
         domain_identifier = self.request.get('domain')
+        domain_key = Domain.key_from_name(domain_identifier)
         task_identifier = self.request.get('task')
-        sequence = int(self.request.get('sequence'))
-        add_assignee = self.request.get('add_assignee')
-        remove_assignee = self.request.get('remove_assignee')
-        assert add_assignee != remove_assignee
-
-        def update_reference_count(reference_counts):
-            if remove_assignee in reference_counts:
-                count = reference_counts[remove_assignee]
-                if not count > 0:
-                    logging.error("Attempt to decrement 0 ref count")
-                else:
-                    reference_counts[remove_assignee] = count - 1
-            if add_assignee:
-                count = reference_counts.get(add_assignee, 0)
-                reference_counts[add_assignee] = count + 1
-
-        def _get_index(task):
-            index = TaskIndex.get_by_key_name(task.identifier(),
-                                              parent=task)
-            if not index:
-                index = TaskIndex(key_name=task.identifier(), parent=task)
-            return index
 
         def txn():
             task = api.get_task(domain_identifier, task_identifier)
-            description = "%s/%s" % (domain_identifier, task_identifier)
             if not task:
-                logging.error("Task '%s/%s' does not exist", description)
-                return None, False
-
-            index = _get_index(task)
-            if index.sequence < sequence: # Not our time yet, retry later
-                logging.warning("Worker out of sequence: %d (%d required)",
-                                index.sequence,
-                                sequence)
-                self.error(400)
-                return task, False
-            if index.sequence > sequence: # passed us, must be a duplicate
-                return task, False
-
-            reference_counts = json.loads(index.reference_counts)
-            update_reference_count(reference_counts)
-            propagate_add_assignee = add_assignee
-            propagate_remove_assignee = remove_assignee
-            if reference_counts.get(add_assignee, None) == 1:
-                # New assignee entry
-                index.assignees.append(add_assignee)
-            else:
-                propagate_add_assignee = None # do not propagate
-            if reference_counts.get(remove_assignee, None) == 0:
-                # Assignee is completely gone
-                del reference_counts[remove_assignee]
-                index.assignees.remove(remove_assignee)
-            else:
-                propagate_remove_assignee = None # do not propagate
-
-            index.assignee_count = len(index.assignees)
-            index.reference_counts = json.dumps(reference_counts)
-            index.sequence = index.sequence + 1 # move forward
-            index.put()
-            parent_task = task.parent_task
+                logging.error("Task '%s/%s' does not exist",
+                              domain_identifier, task_identifier)
+                return None
+            parent_task = api.get_task(domain_identifier,
+                                       task.parent_task_identifier())
             if parent_task:
-                UpdateAssigneeIndex.queue_worker(parent_task,
-                                                 propagate_add_assignee,
-                                                 propagate_remove_assignee)
-            return task, (propagate_add_assignee or propagate_remove_assignee)
+                parent_index = TaskIndex.get_by_key_name(
+                    parent_task.identifier(),
+                    parent=parent_task.key())
+                if not parent_index:
+                    logging.error("Missing index for parent task '%s/%s'",
+                                  domain_identifier, parent_identifier)
+                    self.error(400) # Retry later
+                    return None
+                hierarchy = list(parent_index.hierarchy)
+                hierarchy.append(parent_task.identifier())
+                level = parent_task.derived_level + 1
+            else:               # root task
+                hierarchy = []
+                level = 0
+            index = TaskIndex.get_by_key_name(task_identifier, parent=task)
+            if not index:
+                index = TaskIndex(parent=task, key_name=task_identifier)
+            index.hierarchy = hierarchy
+            index.put()
+            task.derived_level = level
+            task.put()
+            return task
 
-        task, changed = db.run_in_transaction(txn)
-        if changed and task:
-            BakeAssigneeDescription.queue_worker(task)
+        task = db.run_in_transaction(txn)
+        if not task:
+            return
 
+        # Spawn new tasks to propagate downwards. This is done outside
+        # the transaction, as only 5 transactional tasks can be
+        # queued. It is not a problem if the tasks will fail after the
+        # transaction, as this task is then retried, so the
+        # propagation will always proceeed.
+        query = Task.all(keys_only=True).\
+            ancestor(Domain.key_from_name(domain_identifier)).\
+            filter('parent_task =', task.key())
+        for subtask_key in query:
+            subtask_identifier = subtask_key.id_or_name()
+            # TODO(tijmen): Batch queue tasks
+            UpdateTaskHierarchy.enqueue(domain_identifier, subtask_identifier)
 
     @staticmethod
-    def queue_worker(task, add_assignee=None, remove_assignee=None):
+    def enqueue(domain_identifier, task_identifier, transactional=False):
         """
-        Queues a new worker to update the assignees of the given
-        task.
-
-        There are two arguments: add_assignee is used to add an
-        assignee to a task and remove_assignee is used to remove one
-        from the task. They can also be None if none is updated. They
-        can also both be specified, to indicate a change in assignees.
-
-        This function must be run as part of a transaction because
-        this function increments the assignee sequence number of the
-        tasks and queues a transactional task.
-
-        If both assignee arguments are None, or are the same User
-        instance, then this function will act as a no-op.
+        Queues a new worker to update the task hierarchy of the task
+        with the given identifier.
 
         Args:
-            task: An instance of the Task mode.
-            add_assignee: The identifier string of the user that is added
-                as assignee. Can be None.
-            remove_assignee: The identifier string of the user that is
-                removed as assignee. Can be None.
+            domain_identifier: The domain identifier string
+            task_identifier: The task identifier string
+            transactional: If set to true, then the task will be added
+                as a transactional task.
 
         Raises:
-            ValueError: If this function is called outside a transaction.
+            ValueError: If transactional is set to True and the
+                 function is not called as part of a transaction.
         """
-        if add_assignee == remove_assignee:
-            return
+        if transactional and not db.is_in_transaction():
+            raise ValueError("Adding a transactional worker requires a"
+                             " transaction")
 
-        if not db.is_in_transaction():
-            raise ValueError("Requires a transaction")
-
-        sequence = task.assignee_index_sequence
-        task.assignee_index_sequence = sequence + 1
-        task.put()
-        queue = taskqueue.Queue('update-task-index')
-        params = { 'task': task.identifier(),
-                   'domain': task.domain_identifier(),
-                   'sequence': sequence }
-        if add_assignee:
-            params['add_assignee'] = add_assignee
-        if remove_assignee:
-            params['remove_assignee'] = remove_assignee
+        queue = taskqueue.Queue('update-task-hierarchy')
+        task = taskqueue.Task(url='/workers/update-task-hierarchy',
+                              params={ 'task': task_identifier,
+                                       'domain': domain_identifier })
         try:
-            task = taskqueue.Task(url='/workers/update-assignee-index',
-                                  params=params)
-            queue.add(task, transactional=True)
+            queue.add(task, transactional=transactional)
         except taskqueue.TransientError:
-            queue.add(task, transactional=True)
+            queue.add(task, transactional=transactional)
 
 
-class BakeAssigneeDescription(webapp.RequestHandler):
-    """
-    Bakes the task assignee description based on the assignees in the
-    assignee index.
-    """
-    def post(self):
-        domain_identifier = self.request.get('domain')
-        task_identifier = self.request.get('task')
-        task = api.get_task(domain_identifier, task_identifier)
-        if not task:
-            logging.error("No task '%s/%s'", domain_identifier, task_identifier)
-            return
-        index = TaskIndex.get_by_key_name(task.identifier(),
-                                          parent=task)
-        if not index:
-            logging.error("No assignee index for task '%s'", task)
-            return
+mapping = [
+    ('/workers/update-task-hierarchy', UpdateTaskHierarchy),
+    ('/workers/update-task-completion', UpdateTaskCompletion)
+    ]
 
-        assignees = index.assignees
-        description = ""
-        if len(assignees) == 1:
-            user = api.get_user_from_identifier(assignees[0])
-            description = user.name
-        elif len(assignees) == 2:
-            user0 = api.get_user_from_identifier(assignees[0])
-            user1 = api.get_user_from_identifier(assignees[1])
-            description = "%s, %s" % (user0.name, user1.name)
-        elif len(assignees) > 2:
-            user = api.get_user_from_identifier(assignees[0])
-            description = "%s and %d others" % (user.name, len(assignees) - 1)
-        task.baked_assignee_description = description
-        task.put()
-
-    @staticmethod
-    def queue_worker(task):
-        """Queues a worker to update task assignee description of the given
-        task instance.
-        """
-        taskqueue.add(url='/workers/bake-assignee-description',
-                      params={ 'task': task.identifier(),
-                               'domain': task.domain_identifier()})
-
-
-mapping = [('/workers/update-task-index', UpdateTaskIndex),
-           ('/workers/update-assignee-index', UpdateAssigneeIndex),
-           ('/workers/bake-assignee-description', BakeAssigneeDescription)]
 application = webapp.WSGIApplication(mapping)
 
 def main():
