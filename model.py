@@ -15,7 +15,7 @@
 """
 Model classes used in the planner.
 """
-
+import copy
 from google.appengine.ext import db
 import simplejson as json
 import aetycoon
@@ -92,44 +92,32 @@ class User(db.Model):
         return User.default_context.get_value_for_datastore(self)
 
 
-# PicklePropert from the aetycoon repository:
-# (https://github.com/Arachnid/aetycoon/blob/master/__init__.py)
-class _PickleProperty(db.Property):
-  """A property for storing complex objects in the datastore in pickled form.
+# JsonProperty, by Konstantin, original source at:
+# http://kovshenin.com/archives/app-engine-json-objects-google-datastore/
+#
+# Changed a few things around.
+class JsonProperty(db.TextProperty):
+    def validate(self, value):
+        return value
 
-  Example usage:
+    def get_value_for_datastore(self, model_instance):
+        result = super(JsonProperty, self).get_value_for_datastore(model_instance)
+        result = json.dumps(result)
+        return db.Text(result)
 
-  >>> class PickleModel(db.Model):
-  ...   data = PickleProperty()
+    def make_value_from_datastore(self, value):
+        if value is not None:
+            try:
+                value = json.loads(str(value))
+            except:
+                value = self.default
+        return super(JsonProperty, self).make_value_from_datastore(value)
 
-  >>> model = PickleModel()
-  >>> model.data = {"foo": "bar"}
-  >>> model.data
-  {'foo': 'bar'}
-  >>> model.put() # doctest: +ELLIPSIS
-  datastore_types.Key.from_path(u'PickleModel', ...)
-
-  >>> model2 = PickleModel.all().get()
-  >>> model2.data
-  {'foo': 'bar'}
-  """
-
-  data_type = db.Blob
-
-  def get_value_for_datastore(self, model_instance):
-    value = self.__get__(model_instance, model_instance.__class__)
-    if value is not None:
-      return db.Blob(pickle.dumps(value))
-
-  def make_value_from_datastore(self, value):
-    if value is not None:
-      return pickle.loads(str(value))
-
-  def default_value(self):
-    """If possible, copy the value passed in the default= keyword argument.
-    This prevents mutable objects such as dictionaries from being shared across
-    instances."""
-    return copy.copy(self.default)
+    def default_value(self):
+        """If possible, copy the value passed in the default= keyword
+        argument.  This prevents mutable objects such as dictionaries
+        from being shared across instances."""
+        return copy.copy(self.default)
 
 
 class Task(db.Model):
@@ -231,7 +219,7 @@ class Task(db.Model):
     #     completed by this assignee.
     #  all: an integer describing the total number of atomic subtasks
     #     assigned to this assignee.
-    derived_assignees = aetycoon.PickleProperty(default={})
+    derived_assignees = JsonProperty(default={})
 
     def identifier(self):
         """Returns a string with the task identifier"""
@@ -319,10 +307,10 @@ class Task(db.Model):
         this task has no assignees, then this function returns the
         empty string.
         """
-        # TODO(tijmen): Make this a proper string for lots of
-        # assignees, ie:  tijmen, el and X others..
-        return "TEMP"
-#        return ','.join(assignee[name] for assignee in self.assignees)
+        # TODO(tijmen): Limit this if more than 3 names are used.
+        return ', '.join(assignee.get('name', "")
+                         for assignee
+                         in self.derived_assignees.itervalues())
 
     def is_completed(self):
         """
@@ -380,4 +368,3 @@ class TaskIndex(db.Model):
     assignees = db.StringListProperty(default=[])
     # The size of the assignees list
     assignee_count = aetycoon.LengthProperty(assignees)
-

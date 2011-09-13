@@ -76,14 +76,16 @@ class UpdateTaskCompletion(webapp.RequestHandler):
                 task.derived_size = 1
                 task.derived_number_of_subtasks = 0
                 task.derived_remaining_subtasks = 0
-                # TODO(tijmen): derived_assignees
                 if task.assignee_identifier():
                     index.assignees = [task.assignee_identifier()]
-#                     task.derived_assignees[task.assignee_identifier()] = {
-#                         'id': task.assignee_identifier(),
-#                         'completed_st': 0,
-#                         'all_st': 0
-#                         }
+                    # TODO(tijmen): Use multi entity group transactions
+                    # to get the name of the assignee here.
+                    task.derived_assignees[task.assignee_identifier()] = {
+                        'id': task.assignee_identifier(),
+                        'name': task.assignee_identifier(),
+                        'completed': 0,
+                        'all': 0
+                        }
             else:               # composite task
                 logging.info("Task '%s' has %d subtasks" % (task, len(subtasks)))
                 task.derived_completed = all((t.derived_completed
@@ -92,6 +94,23 @@ class UpdateTaskCompletion(webapp.RequestHandler):
                 task.derived_number_of_subtasks = len(subtasks)
                 task.derived_remaining_subtasks = len(list(
                     t for t in subtasks if not t.derived_completed))
+                # Compute derived assignees, and sum the total of all
+                # their assigned and completed subtasks.
+                assignees = {}
+                for subtask in subtasks:
+                    subtask_assignees = subtask.derived_assignees
+                    for id, record in subtask_assignees.iteritems():
+                        if not id in assignees:
+                            assignees[id] = {
+                                'id': id,
+                                'name': id,
+                                'completed': 0,
+                                'all': 0
+                                }
+                        assignees[id]['completed'] += record['completed']
+                        assignees[id]['all'] += record['all']
+                task.derived_assignees = assignees
+                index.assignees = list(assignees.iterkeys())
             task.put()
             index.put()
             # Propagate further upwards
@@ -99,7 +118,6 @@ class UpdateTaskCompletion(webapp.RequestHandler):
                 UpdateTaskCompletion.enqueue(domain_identifier,
                                              task.parent_task_identifier(),
                                              transactional=True)
-
         db.run_in_transaction(txn)
 
 
