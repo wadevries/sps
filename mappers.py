@@ -14,6 +14,7 @@
 """
 Mappers, currently only used for schema migration etc.
 """
+import logging
 from mapreduce import operation as op, context
 from google.appengine.ext import db
 
@@ -21,36 +22,30 @@ from model import Domain, Task, User, TaskIndex
 import workers
 import api
 
-def clear_all_indices(task):
-    """
-    Clears all old indices, must be called before all
-    tasks indices are rebuild.
 
-    This because to sequence number of all tasks must be
-    zeroed before the indices start to rebuild.
+def rebuild_hierarchy(task):
     """
-    task_index = TaskIndex.get_by_key_name(task.identifier(),
-                                           parent=task)
-    if task_index:
-        db.delete(task_index)
-    task.assignee_index_sequence = 0
-    yield op.db.Put(task)
+    Rebuilds all derived properties and hierarchies. This includes the
+    TaskIndexes. This operation will only create tasks, which will do
+    the actual work.
+    """
+    if task.root():
+        workers.UpdateTaskHierarchy.enqueue(task.domain_identifier(),
+                                            task.identifier())
 
-def rebuild_indices(task):
-    """
-    Rebuilds all TaskIndices. The old indices MUST be cleared first.
-    """
-
+    domain_key = Domain.key_from_name(task.domain_identifier())
+    task_key = task.key()
+    logging.info("Domain_key %s" % domain_key)
     def txn():
-        workers.UpdateTaskIndex.queue_worker(task.domain_identifier(),
-                                             task.identifier(),
-                                             transactional=True)
-        instance = api.get_task(task.domain_identifier(),
-                                task.identifier())
-        if instance:
-            workers.UpdateAssigneeIndex.queue_worker(
-                instance,
-                add_assignee=instance.assignee_identifier())
+        # Actual test in the datastore to see if the task is atomic,
+        # as it is a computed property.
+        query = Task.all().\
+            ancestor(domain_key).\
+            filter('parent_task =', task_key)
+        subtask = query.get()
+        if not subtask:         # atomic
+            workers.UpdateTaskCompletion.enqueue(task.domain_identifier(),
+                                                 task.identifier())
     db.run_in_transaction(txn)
 
 

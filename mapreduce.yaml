@@ -1,17 +1,8 @@
 mapreduce:
-- name: Clear all Task indices
+- name: Rebuild Hierarchy
   mapper:
     input_reader: mapreduce.input_readers.DatastoreInputReader
-    handler: mappers.clear_all_indices
-    params:
-    - name: entity_kind
-      default: model.Task
-    - name: processing_rate
-      default: 1
-- name: Rebuild all Task indices
-  mapper:
-    input_reader: mapreduce.input_readers.DatastoreInputReader
-    handler: mappers.rebuild_indices
+    handler: mappers.rebuild_hierarchy
     params:
     - name: entity_kind
       default: model.Task
