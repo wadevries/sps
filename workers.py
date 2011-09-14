@@ -32,10 +32,8 @@ from model import Domain, Task, TaskIndex, Context, User
 # A test to check if we are on the development sdk, as that one
 # does not support multi entity groups yet.
 import os
-if os.environ.get('SERVER_SOFTWARE','').startswith('Development'):
-    DEV_SERVER = True
-else:
-    DEV_SERVER = False
+DEV_SERVER = os.environ.get('SERVER_SOFTWARE','').startswith('Development')
+
 
 class UpdateTaskCompletion(webapp.RequestHandler):
     """
@@ -76,7 +74,6 @@ class UpdateTaskCompletion(webapp.RequestHandler):
                             ancestor(domain_key).
                             filter('parent_task =', task.key()))
             if not subtasks:    # atomic task
-                logging.info("No subtasks found for atomic task '%s'" % task)
                 task.derived_completed = task.completed
                 task.derived_size = 1
                 task.derived_number_of_subtasks = 0
@@ -99,13 +96,11 @@ class UpdateTaskCompletion(webapp.RequestHandler):
                         'all': 0
                         }
             else:               # composite task
-                logging.info("Task '%s' has %d subtasks" % (task, len(subtasks)))
-                task.derived_completed = all((t.derived_completed
-                                              for t in subtasks))
+                task.derived_completed = all(t.is_completed() for t in subtasks)
                 task.derived_size = 1 + sum(t.derived_size for t in subtasks)
                 task.derived_number_of_subtasks = len(subtasks)
                 task.derived_remaining_subtasks = len(list(
-                    t for t in subtasks if not t.derived_completed))
+                    t for t in subtasks if not t.is_completed()))
                 # Compute derived assignees, and sum the total of all
                 # their assigned and completed subtasks.
                 assignees = {}
