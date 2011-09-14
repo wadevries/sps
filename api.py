@@ -534,67 +534,36 @@ def create_domain(domain, domain_title, user):
     return new_domain
 
 
-def _sort_tasks(tasks):
+def _sort_tasks(tasks, user_identifier=None):
     """
     Sorts the list of Task instances, in place, on their completion
-    state and then on time, newest tasks first.
+    state,and finally on time, with the newer tasks first. If
+    |user_identifier| is provided, the tasks will be sorted on their
+    active state after being sorted on completion.
 
     Args:
         tasks: A list of Task model instances
+        user_identifier: Optional user identifier string
 
     Returns:
         Nothing. The list is sorted in place.
     """
-    def task_cmp(t1, t2):
-        if t1.is_completed() != t2.is_completed():
-            return cmp(t1.is_completed(), t2.is_completed())
+    def task_cmp_active(t1, t2):
+        c = cmp(t1.is_completed(), t2.is_completed())
+        if c:
+            return c
+        c = -cmp(t1.is_active(user_identifier), t2.is_active(user_identifier))
+        if c:
+            return c
         return -cmp(t1.time, t2.time)
 
-    tasks.sort(cmp=task_cmp)
+    def task_cmp(t1, t2):
+        c = cmp(t1.is_completed(), t2.is_completed())
+        if c:
+            return c
+        return -cmp(t1.time, t2.time)
 
-
-def get_all_subtasks(task, limit=50, depth_limit=None):
-    """
-    Returns a list of all subtasks of the given task, in the order
-    as a pre-order traversal through the task hierarchy.
-
-    This function will perform one query for each level of the subtask
-    hierarchy.
-
-    Args:
-        task: An instance of the Task model.
-        limit: The maximum number of subtasks to return.
-        depth_limit: The maximum depth of subtasks in the task
-            hierarchy.
-
-    Returns:
-        A list with all subtasks of the given task.
-
-    Raises:
-        ValueError: The depth_limit or limit are not positive integers
-    """
-    if not depth_limit:
-        #  ListProperties cannot contain more than 5000 elements anyway
-        depth_limit = 5000
-    if depth_limit < 0 or limit < 0:
-        raise ValueError("Invalid limits")
-
-    task_level = task.hierarchy_level()
-    tasks = []
-    for depth in range(depth_limit):
-        query = TaskIndex.all(keys_only=True).\
-            ancestor(Domain.key_from_name(task.domain_identifier())).\
-            filter('level = ', task_level + depth + 1).\
-            filter('hierarchy = ', task.identifier())
-        fetched = query.fetch(limit)
-        tasks.extend(Task.get([key.parent() for key in fetched]))
-        limit = limit - len(fetched)
-        if not fetched or limit < 1:
-            break               # stop
-
-    _sort_tasks(tasks)
-    return _group_tasks(tasks)
-
+    tasks.sort(cmp=(task_cmp_active if user_identifier else task_cmp))
 
 
 def get_open_tasks(domain_identifier,
@@ -691,7 +660,10 @@ def get_assigned_tasks(domain_identifier,
     return tasks
 
 
-def get_all_direct_subtasks(domain_identifier, root_task=None, limit=100):
+def get_all_direct_subtasks(domain_identifier,
+                            root_task=None,
+                            limit=100,
+                            user_identifier=None):
     """
     Returns all direct subtasks of a |root_task| in the given domain.
     If no |root_task| is specified, then all root tasks of the
@@ -703,19 +675,21 @@ def get_all_direct_subtasks(domain_identifier, root_task=None, limit=100):
         domain_identifier: The domain identifier string
         root_task: An instance of the Task model
         limit: The maximum number of tasks that will be returned
+        user_identifier: Optional user identifier. If provided, the tasks
+            will be sorted on their active state for that user.
 
     Returns:
         A list of at most |limit| task instances of the domain,
         who are all direct descendants of |root_task|, or are
         all root task if no specific |root_task| is specified.
-        The list is ordered on task creation time, not completed
-        tasks first.
+        The tasks are ordered on completion state, and if a |user_identifier|
+        is provided, also on active state.
     """
     query = Task.all().\
         ancestor(Domain.key_from_name(domain_identifier)).\
         filter('parent_task = ', root_task)
     tasks = query.fetch(limit)
-    _sort_tasks(tasks)
+    _sort_tasks(tasks, user_identifier)
     return tasks
 
 

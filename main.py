@@ -145,9 +145,11 @@ class Overview(webapp.RequestHandler):
             tasks_heading = "Open Tasks"
         else:                   # view == 'all' or None
             view = 'all'
+            user_id = user.identifier()
             tasks = api.get_all_direct_subtasks(domain_identifier,
                                                 root_task=None,
-                                                limit=200)
+                                                limit=200,
+                                                user_identifier=user_id)
             tasks_heading = "All Tasks"
             no_tasks_message = "No tasks are created in this domain"
 

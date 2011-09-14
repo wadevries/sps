@@ -344,6 +344,9 @@ class Task(db.Model):
         is active iff it has one or more atomic tasks that have not
         yet been completed by the user.
         """
+        if self.is_completed():
+            # completed tasks cannot be active.
+            return False
         record = self.derived_assignees.get(user_identifier)
         if not record:
             return False
