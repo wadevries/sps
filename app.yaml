@@ -3,6 +3,9 @@ version: production
 runtime: python
 api_version: 1
 
+builtins:
+- appstats: on
+
 handlers:
 - url: /mapreduce(/.*)?
   script: mapreduce/main.py
