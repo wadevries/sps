@@ -513,6 +513,7 @@ def create_domain(domain, domain_title, user):
         exists with that identifier, the identifier is not valid or
         the domain_title is empty.
     """
+    # TODO(tijmen): Use multiple entity group transaction here
     domain_title = domain_title.splitlines()[0].strip()
     if (not re.match(VALID_DOMAIN_IDENTIFIER, domain) or
         not domain_title):
@@ -533,7 +534,6 @@ def create_domain(domain, domain_title, user):
     return new_domain
 
 
-
 def _sort_tasks(tasks):
     """
     Sorts the list of Task instances, in place, on their completion
@@ -546,8 +546,8 @@ def _sort_tasks(tasks):
         Nothing. The list is sorted in place.
     """
     def task_cmp(t1, t2):
-        if t1.completed != t2.completed:
-            return cmp(t1.completed, t2.completed)
+        if t1.is_completed() != t2.is_completed():
+            return cmp(t1.is_completed(), t2.is_completed())
         return -cmp(t1.time, t2.time)
 
     tasks.sort(cmp=task_cmp)
@@ -743,46 +743,32 @@ def get_assigned_toplevel_tasks(domain, user, limit=50):
     return tasks
 
 
-def get_all_toplevel_tasks(domain, limit=50):
-    """Returns all the top level tasks in the |domain|.
+def get_all_direct_subtasks(domain_identifier, root_task=None, limit=100):
+    """
+    Returns all direct subtasks of a |root_task| in the given domain.
+    If no |root_task| is specified, then all root tasks of the
+    domain will be returned.
+
+    This function returns at most |limit| tasks.
 
     Args:
-        domain: The domain identifier string
-        limit: The maximum number of tasks that will be returned.
+        domain_identifier: The domain identifier string
+        root_task: An instance of the Task model
+        limit: The maximum number of tasks that will be returned
 
     Returns:
-        A list of at most limit task instances of |domain|, ordered on task
-        creation time, with the newest task first.
+        A list of at most |limit| task instances of the domain,
+        who are all direct descendants of |root_task|, or are
+        all root task if no specific |root_task| is specified.
+        The list is ordered on task creation time, not completed
+        tasks first.
     """
-    query = TaskIndex.all(keys_only=True).\
+    query = Task.all().\
         ancestor(Domain.key_from_name(domain)).\
-        filter('level = ', 0)
-    fetched = query.fetch(limit)
-    tasks = [task
-             for task in Task.get([key.parent() for key in fetched])
-             if task]
+        filter('parent_task = ', root_task)
+    tasks = query.fetch(limit)
     _sort_tasks(tasks)
     return tasks
-
-
-def get_all_tasks(domain, limit=50):
-    """Returns all the tasks in the |domain|, ordered in a hierarchy.
-
-    Args:
-        domain: The domain identifier string
-        limit: The maximum number of tasks that will be returned.
-
-    Returns:
-        A list of at most limit task instances of |domain|, ordered on task
-        creation time, with the newest task first.
-    """
-    def txn():
-        query = Task.all().ancestor(Domain.key_from_name(domain)).\
-            order('-time')
-        return _group_tasks(query.fetch(limit),
-                            complete_hierarchy=True,
-                            domain=domain)
-    return db.run_in_transaction(txn)
 
 
 def _group_tasks(tasks,

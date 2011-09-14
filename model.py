@@ -191,8 +191,8 @@ class Task(db.Model):
     # atomic task, it is set to the value of |completed|. Otherwise
     # it is set to true iff all subtasks are completed.
     derived_completed = db.BooleanProperty(default=False)
-    # The size of the tree hierarchy formed by this tasks and all
-    # its supertasks. If the task is an atomic task, the size is 1,
+    # The size of the tree hierarchy formed by this tasks and all its
+    # subtasks. If the task is an atomic task, the size is 1,
     # otherwise it is the sum of all its subtasks, plus one.
     derived_size = db.IntegerProperty(default=1, indexed=False)
     # The number of direct subtasks of this task. If this count is 0,

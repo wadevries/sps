@@ -175,7 +175,9 @@ class AllTasksOverview(webapp.RequestHandler):
         if not user:
             self.error(404)
             return
-        all_tasks = api.get_all_toplevel_tasks(domain_identifier, limit=200)
+        all_tasks = api.get_all_direct_subtasks(domain_identifier,
+                                                root_task=None,
+                                                limit=200)
         domain = api.get_domain(domain_identifier)
         template_values = {
             'domain_name': domain.name,
@@ -205,7 +207,9 @@ class TaskDetail(webapp.RequestHandler):
         user = api.get_logged_in_user()
         domain = api.get_domain(domain_identifier)
         if view == 'all':
-            subtasks = api.get_all_subtasks(task, depth_limit=1)
+            subtasks = api.get_all_direct_subtasks(domain_identifier,
+                                                   root_task=task,
+                                                   limit=200)
             subtasks_heading = "All Subtasks of '%s'" % task.title()
             no_subtasks_description = "No subtasks for this task."
         elif view == 'open':
