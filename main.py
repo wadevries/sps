@@ -96,7 +96,7 @@ class Landing(webapp.RequestHandler):
     The main landing page. Shows the users domains and links to them.
     """
     def get(self):
-        user = api.get_user()
+        user = api.get_logged_in_user()
         domains = api.get_all_domains_for_user(user)
         session = Session(writer='cookie',
                           wsgiref_headers=self.response.headers)
@@ -202,7 +202,7 @@ class TaskDetail(webapp.RequestHandler):
             return
         session = Session(writer='cookie',
                           wsgiref_headers=self.response.headers)
-        user = api.get_user()
+        user = api.get_logged_in_user()
         domain = api.get_domain(domain_identifier)
         if view == 'all':
             subtasks = api.get_all_subtasks(task, depth_limit=1)
@@ -256,7 +256,7 @@ class TaskMoveView(webapp.RequestHandler):
 
         session = Session(writer='cookie',
                           wsgiref_headers=self.response.headers)
-        user = api.get_user()
+        user = api.get_logged_in_user()
         domain = api.get_domain(domain_identifier)
         tasks = api.get_all_tasks(domain_identifier, limit=200)
 
@@ -412,7 +412,7 @@ class CreateDomain(webapp.RequestHandler):
         except (TypeError, ValueError):
             self.error(403)
             return
-        user = api.get_user()
+        user = api.get_logged_in_user()
         domain = api.create_domain(domain_id, title, user)
         if not domain:
             self.response.out.write("Could not create domain")

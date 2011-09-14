@@ -69,7 +69,7 @@ def admin_of_domain(domain_identifier, user):
     return True
 
 
-def get_user():
+def get_logged_in_user():
     """Gets the currently logged in user.
 
     The login is based on the GAE user system, but Users are stored as
@@ -90,10 +90,17 @@ def get_user():
     return user
 
 
-def get_user_from_identifier(user_identifier):
-    """Returns the user corresponding to the given identifier"""
-    # TODO(tijmen): Name this get_user and rename the current
-    # function to something like get_logged_in_user().
+def get_user(user_identifier):
+    """
+    Returns the user corresponding to the given identifier.
+
+    Args:
+        The user identifier string
+
+    Returns:
+        An instance of the User model, or None if no user exists
+        with that identifier.
+    """
     return User.get_by_key_name(user_identifier)
 
 
@@ -111,7 +118,7 @@ def get_and_validate_user(domain_identifier):
         An instance of the User model, or None if the user
         is not logged in or not a member of the domain.
     """
-    user = get_user()
+    user = get_logged_in_user()
     if not user or not member_of_domain(domain_identifier, user):
         return None
     return user

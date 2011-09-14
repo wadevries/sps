@@ -19,16 +19,23 @@ performed in the background. Tasks in the taskqueue sense are called
 """
 import os
 import logging
-from google.appengine.api import users
+from google.appengine.api import users, datastore
 from google.appengine.api import taskqueue
 from google.appengine.ext import db
 from google.appengine.ext import webapp
+from google.appengine.datastore import datastore_rpc
 from google.appengine.ext.webapp.util import run_wsgi_app
 import simplejson as json
-
 import api
 from model import Domain, Task, TaskIndex, Context, User
 
+# A test to check if we are on the development sdk, as that one
+# does not support multi entity groups yet.
+import os
+if os.environ.get('SERVER_SOFTWARE','').startswith('Development'):
+    DEV_SERVER = True
+else:
+    DEV_SERVER = False
 
 class UpdateTaskCompletion(webapp.RequestHandler):
     """
@@ -62,27 +69,32 @@ class UpdateTaskCompletion(webapp.RequestHandler):
             index = TaskIndex.get_by_key_name(task_identifier, parent=task)
             if not index:
                 index = TaskIndex(parent=task, key_name=task_identifier)
-
             # Get all subtasks. The ancestor queries are strongly
             # consistent, so when propagating upwards through the
             # hierarchy the changes are reflected.
             subtasks = list(Task.all().
                             ancestor(domain_key).
                             filter('parent_task =', task.key()))
-
             if not subtasks:    # atomic task
                 logging.info("No subtasks found for atomic task '%s'" % task)
                 task.derived_completed = task.completed
                 task.derived_size = 1
                 task.derived_number_of_subtasks = 0
                 task.derived_remaining_subtasks = 0
-                if task.assignee_identifier():
-                    index.assignees = [task.assignee_identifier()]
-                    # TODO(tijmen): Use multi entity group transactions
-                    # to get the name of the assignee here.
+                assignee_identifier = task.assignee_identifier()
+                if assignee_identifier:
+                    index.assignees = [assignee_identifier]
+                    if not DEV_SERVER:
+                        # Uses a multi entity group transaction to get the name
+                        # of the assignee. This is cached in the record for
+                        # quick descriptions.
+                        assignee = api.get_user(assignee_identifier)
+                        name = assignee.name if assignee else '<Missing>'
+                    else:
+                        name = 'temp'
                     task.derived_assignees[task.assignee_identifier()] = {
                         'id': task.assignee_identifier(),
-                        'name': task.assignee_identifier(),
+                        'name': name,
                         'completed': 0,
                         'all': 0
                         }
@@ -103,7 +115,7 @@ class UpdateTaskCompletion(webapp.RequestHandler):
                         if not id in assignees:
                             assignees[id] = {
                                 'id': id,
-                                'name': id,
+                                'name': record['name'],
                                 'completed': 0,
                                 'all': 0
                                 }
@@ -118,7 +130,13 @@ class UpdateTaskCompletion(webapp.RequestHandler):
                 UpdateTaskCompletion.enqueue(domain_identifier,
                                              task.parent_task_identifier(),
                                              transactional=True)
-        db.run_in_transaction(txn)
+        # Use a multi entity group transaction, if available
+        if DEV_SERVER:
+            db.run_in_transaction(txn)
+        else:
+            options = datastore_rpc.TransactionOptions(
+                allow_multiple_entity_groups=True)
+            datastore.RunInTransactionOptions(options, txn)
 
 
     @staticmethod
