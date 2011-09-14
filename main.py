@@ -73,6 +73,7 @@ def _task_template_values(tasks, user, invert_levels=False):
               'assignee_description': task.assignee_description(),
               'can_complete': api.can_complete_task(task, user),
               'summary': task.personalized_summary(user_identifier),
+              'active': task.is_active(user_identifier),
               'id': task.identifier() }
             for task in tasks]
 

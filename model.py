@@ -333,8 +333,21 @@ class Task(db.Model):
         summary = "1 task" if count == 1 else "%d tasks" % count
         record = self.derived_assignees.get(user_identifier)
         if record:
-            summary += ", %d assigned to you" % record.get('all', 0)
+            all = record.get('all', 0)
+            completed = record.get('completed', 0)
+            summary += ", %d out of %d completed" % (completed, all)
         return summary
+
+    def is_active(self, user_identifier):
+        """
+        Returns true if this task is active for the given user. A task
+        is active iff it has one or more atomic tasks that have not
+        yet been completed by the user.
+        """
+        record = self.derived_assignees.get(user_identifier)
+        if not record:
+            return False
+        return (record.get('all') - record.get('completed')) > 0
 
     def is_completed(self):
         """

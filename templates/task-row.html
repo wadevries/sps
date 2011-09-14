@@ -1,9 +1,9 @@
-<tr>
+<tr {% if not task.active %}class="inactive-task-row"{% endif %}>
   <td class="checkbox">
     <form>
       {% for i in task.levels %}&nbsp;&middot;{% endfor %}<input type="checkbox" name="completed" value="{{ task.id }}" {% if task.completed %} checked {% endif %}{% if not task.can_complete %}disabled{% endif %}>
-      </form>
-    </td>
+    </form>
+  </td>
   <td class="task-title">
     <a href="/d/{{ domain_identifier }}/task/{{ task.id }}?view={{ view_mode }}">
       {{ task.title|escape }}

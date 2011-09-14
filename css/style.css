@@ -6,6 +6,8 @@ td.checkbox { width: 60px; }
 
 td.task-title { width: 400px; }
 
+tr.inactive-task-row { color: gray }
+
 td.task-detail { width: 200px; }
 
 td.assign-button { width: 140px; }
@@ -16,6 +18,7 @@ td.task-title a {
   text-decoration: none;
   color: inherit;
 }
+
 td.task-title a:hover {
   text-decoration: underline;
 }
