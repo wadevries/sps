@@ -29,17 +29,26 @@ title of the task.
 <br>
 
 <hr>
-<table>
-  <tr>
-    <td><a href="/d/{{ domain_identifier }}/">Your Tasks</a></td>
-    <td><a href="/d/{{ domain_identifier }}/open">Open Tasks</a></td>
-    <td><a href="/d/{{ domain_identifier }}/all">All Tasks</a></td>
-  </tr>
-</table>
-<hr>
+<p>
+Show: <a href="/d/{{ domain_identifier }}?view=all">All Tasks</a>
+, <a href="/d/{{ domain_identifier }}?view=open">Open Tasks</a>
+, <a href="/d/{{ domain_identifier }}?view=yours">Your Tasks</a>
 
-{% block body %}
-{% endblock %}
+
+<h3>{{ tasks_heading }}</h3>
+{% if tasks %}
+<form>
+  <table>
+    {% for task in tasks %}
+    {% include 'task-row.html' %}
+    {% endfor %}
+  </table>
+</form>
+{% else %}
+<div class="empty-tasks-list">
+<center><p>{{ no_tasks_message }}</p></center>
+</div>
+{% endif %}
 
 </body>
 </html>

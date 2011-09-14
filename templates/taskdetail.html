@@ -22,7 +22,7 @@
 {% if parent_identifier %}
 <p>Subtask of <a href="/d/{{ domain_identifier }}/task/{{ parent_identifier }}?view={{ view_mode }}">{{ parent_title }}</a></p>
 {% else %}
-<p>Back to <a href="/d/{{ domain_identifier }}">task overview</a></p>
+<p>Back to <a href="/d/{{ domain_identifier }}?view={{view_mode}}">task overview</a></p>
 {% endif %}
 {% if task_description %}
 Description:<br>
@@ -57,7 +57,7 @@ Show: <a href="/d/{{ domain_identifier }}/task/{{ task_identifier }}?view=all">A
   {% for task in subtasks %}
   {% include 'task-row.html' %}
   {% empty %}
-  <div class="empty-subtasks">
+  <div class="empty-tasks-list">
     <center>
     <p>{{ no_subtasks_description }}</p>
     </center>

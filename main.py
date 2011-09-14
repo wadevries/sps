@@ -114,84 +114,56 @@ class Landing(webapp.RequestHandler):
         self.response.out.write(template.render(path, template_values))
 
 
-class YourTasksOverview(webapp.RequestHandler):
+class Overview(webapp.RequestHandler):
     """
-    Overview of all the tasks of the logged in user.
+    Overview of all tasks in a domain. The tasks can be filtered by
+    all/open and yours. Additionally, there is a New Task field to
+    created new tasks with.
     """
     def get(self, domain_identifier):
         session = Session(writer='cookie',
                           wsgiref_headers=self.response.headers)
         user = api.get_and_validate_user(domain_identifier)
         if not user:
-            self.error(404)
+            self.error(404)     # hides domain identifiers
             return
 
         domain = api.get_domain(domain_identifier)
-        your_tasks = api.get_assigned_toplevel_tasks(domain_identifier, user)
-        template_values = {
-            'domain_name': domain.name,
-            'domain_identifier': domain_identifier,
-            'user_name': user.name,
-            'user_identifier': user.identifier(),
-            'messages': get_and_delete_messages(session),
-            'your_tasks': _task_template_values(your_tasks, user),
-            }
-        self.response.out.write(render_template('templates/yourtasks.html',
-                                                template_values))
-
-
-class OpenTasksOverview(webapp.RequestHandler):
-    """
-    Overview of all open tasks.
-    """
-    def get(self, domain_identifier):
+        view = self.request.get('view', 'all')
         session = Session(writer='cookie',
                           wsgiref_headers=self.response.headers)
-        user = api.get_and_validate_user(domain_identifier)
-        if not user:
-            self.error(404)
-            return
 
         domain = api.get_domain(domain_identifier)
-        open_tasks = api.get_open_tasks(domain_identifier,
-                                        root_task=None,
-                                        limit=200)
-        template_values = {
-            'domain_name': domain.name,
-            'domain_identifier': domain_identifier,
-            'user_name': user.name,
-            'user_identifier': user.identifier(),
-            'messages': get_and_delete_messages(session),
-            'open_tasks': _task_template_values(open_tasks, user),
-            }
-        self.response.out.write(render_template('templates/opentasks.html',
-                                                template_values))
-
-
-class AllTasksOverview(webapp.RequestHandler):
-    """
-    Overview of all open tasks.
-    """
-    def get(self, domain_identifier):
-        session = Session(writer='cookie',
-                          wsgiref_headers=self.response.headers)
-        user = api.get_and_validate_user(domain_identifier)
-        if not user:
-            self.error(404)
-            return
-        all_tasks = api.get_all_direct_subtasks(domain_identifier,
+        if view == 'yours':
+            tasks = api.get_assigned_toplevel_tasks(domain_identifier, user)
+            no_tasks_message = "You do not have any unfinished tasks"
+            tasks_heading = "Your Tasks"
+        elif view == 'open':
+            tasks = api.get_open_tasks(domain_identifier,
+                                       root_task=None,
+                                       limit=200)
+            no_tasks_message = "No open subtasks in this domain"
+            tasks_heading = "Open Tasks"
+        else:                   # view == 'all' or None
+            view = 'all'
+            tasks = api.get_all_direct_subtasks(domain_identifier,
                                                 root_task=None,
                                                 limit=200)
-        domain = api.get_domain(domain_identifier)
+            tasks_heading = "All Tasks"
+            no_tasks_message = "No tasks are created in this domain"
+
         template_values = {
             'domain_name': domain.name,
             'domain_identifier': domain_identifier,
             'user_name': user.name,
             'user_identifier': user.identifier(),
             'messages': get_and_delete_messages(session),
-            'all_tasks': _task_template_values(all_tasks, user),
+            'tasks': _task_template_values(tasks, user),
+            'tasks_heading': tasks_heading,
+            'no_tasks_message': no_tasks_message,
+            'view_mode': view,
             }
-        self.response.out.write(render_template('templates/alltasks.html',
+        self.response.out.write(render_template('templates/overview.html',
                                                 template_values))
 
 
@@ -433,7 +405,7 @@ class CreateDomain(webapp.RequestHandler):
         self.redirect('/d/%s/' % domain.key().name())
 
 
-_VALID_DOMAIN_KEY_NAME = '[a-z][a-z0-9-]{1,100}'
+_VALID_DOMAIN_KEY_NAME = api.VALID_DOMAIN_IDENTIFIER
 
 _VALID_TASK_KEY_NAME = '[a-z0-9-]{1,100}'
 
@@ -452,9 +424,9 @@ application = webapp.WSGIApplication([('/create-task', CreateTask),
                                       ('/assign-task', AssignTask),
                                       ('/move-task', MoveTask),
                                       ('/create-domain', CreateDomain),
-                                      (_DOMAIN_URL, YourTasksOverview),
-                                      (_DOMAIN_ALL, AllTasksOverview),
-                                      (_DOMAIN_OPEN, OpenTasksOverview),
+                                      (_DOMAIN_URL, Overview),
+                                      (_DOMAIN_ALL, Overview),
+                                      (_DOMAIN_OPEN, Overview),
                                       (_TASK_MOVE_URL, TaskMoveView),
                                       (_TASK_URL, TaskDetail),
                                       ('/', Landing)])
