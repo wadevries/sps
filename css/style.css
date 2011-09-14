@@ -25,6 +25,8 @@ a.plain {
   text-decoration: none;
 }
 
+.empty-subtasks { width: 800px; height: 60px; }
+
 .taskdescription {
   border: 1px solid #ddd;
 /*  margin: 1em 1em;*/
