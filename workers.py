@@ -76,8 +76,7 @@ class UpdateTaskCompletion(webapp.RequestHandler):
             if not subtasks:    # atomic task
                 task.derived_completed = task.completed
                 task.derived_size = 1
-                task.derived_number_of_subtasks = 0
-                task.derived_remaining_subtasks = 0
+                task.derived_atomic_task_count = 1
                 assignee_identifier = task.assignee_identifier()
                 if assignee_identifier:
                     index.assignees = [assignee_identifier]
@@ -92,15 +91,14 @@ class UpdateTaskCompletion(webapp.RequestHandler):
                     task.derived_assignees[task.assignee_identifier()] = {
                         'id': task.assignee_identifier(),
                         'name': name,
-                        'completed': 0,
-                        'all': 0
+                        'completed': int(task.is_completed()),
+                        'all': 1
                         }
             else:               # composite task
                 task.derived_completed = all(t.is_completed() for t in subtasks)
                 task.derived_size = 1 + sum(t.derived_size for t in subtasks)
-                task.derived_number_of_subtasks = len(subtasks)
-                task.derived_remaining_subtasks = len(list(
-                    t for t in subtasks if not t.is_completed()))
+                task.derived_atomic_task_count = sum(t.atomic_task_count()
+                                                     for t in subtasks)
                 # Compute derived assignees, and sum the total of all
                 # their assigned and completed subtasks.
                 assignees = {}

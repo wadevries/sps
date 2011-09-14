@@ -4,9 +4,9 @@ textarea { width: 600px; height: 60px; }
 
 td.checkbox { width: 60px; }
 
-td.task-title { width: 460px; }
+td.task-title { width: 400px; }
 
-td.task-detail { width: 140px; }
+td.task-detail { width: 200px; }
 
 td.assign-button { width: 140px; }
 

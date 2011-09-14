@@ -110,7 +110,7 @@ class JsonProperty(db.TextProperty):
             try:
                 value = json.loads(str(value))
             except:
-                value = self.default
+                value = self.default_value()
         return super(JsonProperty, self).make_value_from_datastore(value)
 
     def default_value(self):
@@ -144,7 +144,8 @@ class Task(db.Model):
     some queries.
 
     All functions specified in this class do not perform any RPC
-    calls, and can be used freely.
+    calls, and can be used freely. Avoid accessing the properties
+    directly.
 
     The logic that is used to compute the derived properties is
     located in workers.py.
@@ -159,8 +160,6 @@ class Task(db.Model):
     # considered to be in the 'backlog'.
     parent_task = db.SelfReferenceProperty(default=None,
                                            collection_name="subtasks")
-    # TODO(tijmen): Add statuses
-
     # The user who created the task.
     user = db.ReferenceProperty(reference_class=User,
                                 required=True,
@@ -185,6 +184,8 @@ class Task(db.Model):
     # hierarchy, check the derived_completed field.
     completed = db.BooleanProperty(default=False, indexed=False)
     #
+    # TODO(tijmen): Add statuses/messages
+    #
     # DERIVED PROPERTIES
     #
     # The derived field of the completed flag. If this task is an
@@ -195,17 +196,13 @@ class Task(db.Model):
     # subtasks. If the task is an atomic task, the size is 1,
     # otherwise it is the sum of all its subtasks, plus one.
     derived_size = db.IntegerProperty(default=1, indexed=False)
-    # The number of direct subtasks of this task. If this count is 0,
-    # then this task is an atomic task.
-    derived_number_of_subtasks = db.IntegerProperty(default=0)
-    # The number of incomplete subtasks of this task. If this
-    # value is 0, and this task is a composite task (it has subtasks),
-    # then this task is completed.
-    derived_remaining_subtasks = db.IntegerProperty(default=0, indexed=False)
+    # Total number of atomic tasks in this hierarchy. If the task is
+    # an atomic task, the value is 1.
+    derived_atomic_task_count = db.IntegerProperty(default=0, indexed=False)
     # Level of this task in hierarchy. A task without a parent task
     # has level 0, for all other tasks it is defined as the level as
     # its parent plus one.
-    derived_level = db.IntegerProperty(default=0, indexed=False)
+    derived_level = db.IntegerProperty(default=0)
     # A dictionary of assignees of this (composite) task.  The
     # assignees of this list form the union of all the assignees of
     # the atomic subtasks of this task.
@@ -307,10 +304,37 @@ class Task(db.Model):
         this task has no assignees, then this function returns the
         empty string.
         """
-        # TODO(tijmen): Limit this if more than 3 names are used.
-        return ', '.join(assignee.get('name', "")
-                         for assignee
-                         in self.derived_assignees.itervalues())
+        # Sort on assignees with the most assigned tasks
+        sorted_assignees = sorted(self.derived_assignees.itervalues(),
+                                  key=lambda x: -x.get('all', 0))
+        if len(sorted_assignees) > 3:
+            return '%s, %s and %d others' % (sorted_assignees[0]['name'],
+                                             sorted_assignees[1]['name'],
+                                             len(sorted_assignees) - 2)
+        else:
+            return ', '.join(assignee['name'] for assignee in sorted_assignees)
+
+    def personalized_summary(self, user_identifier):
+        """
+        Returns a short string summary of the task with respect to a
+        particular user. The string has the form "X tasks, Y assigned
+        to you", where X is the number of atomic tasks and Y the
+        number of assigned tasks to the user with |user_identifier|.
+
+        If no tasks are assigned to that user, the returned string
+        will just say "X tasks".
+
+        If this task is an atomic task, the returned string will be
+        empty.
+        """
+        if self.atomic():
+            return ""
+        count = self.atomic_task_count()
+        summary = "1 task" if count == 1 else "%d tasks" % count
+        record = self.derived_assignees.get(user_identifier)
+        if record:
+            summary += ", %d assigned to you" % record.get('all', 0)
+        return summary
 
     def is_completed(self):
         """
@@ -320,7 +344,7 @@ class Task(db.Model):
 
     def atomic(self):
         """Returns true if this task is an atomic task"""
-        return self.derived_number_of_subtasks == 0
+        return self.derived_size == 1
 
     def root(self):
         """Returns true if this task has no parent task"""
@@ -337,8 +361,12 @@ class Task(db.Model):
         return self.derived_level
 
     def number_of_subtasks(self):
-        """Returns the number of subtasks of this task."""
-        return self.derived_number_of_subtasks
+        """The total number of subtasks of this task."""
+        return self.derived_size - 1
+
+    def atomic_task_count(self):
+        """Returns the total number of atomic tasks in this task hierarchy."""
+        return self.derived_atomic_task_count
 
     def __str__(self):
         return "%s/%s" % (self.domain_identifier(), self.identifier())

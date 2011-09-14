@@ -10,9 +10,7 @@
     </a>
   </td>
   <td class="task-detail">
-    {% if task.num_subtasks %}
-    {{ task.num_subtasks }} subtask{{ task.num_subtasks|pluralize }}
-    {% endif %}
+    {{ task.summary }}
   </td>
   {% if task.can_assign_to_self %}
   <td class="assign-button">

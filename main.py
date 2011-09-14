@@ -63,6 +63,7 @@ def _task_template_values(tasks, user, invert_levels=False):
 
     Returns a list of dictionaries for each task, in the same order.
     """
+    user_identifier = user.identifier()
     return [{ 'title': task.title(),
               # TODO(tijmen): Property fix the levels
               'levels': range(0),
@@ -71,7 +72,7 @@ def _task_template_values(tasks, user, invert_levels=False):
               'can_assign_to_self': api.can_assign_to_self(task, user),
               'assignee_description': task.assignee_description(),
               'can_complete': api.can_complete_task(task, user),
-              'num_subtasks': task.number_of_subtasks(),
+              'summary': task.personalized_summary(user_identifier),
               'id': task.identifier() }
             for task in tasks]
 
@@ -241,7 +242,6 @@ class TaskDetail(webapp.RequestHandler):
             'task_assignee': task.assignee_description(),
             'task_identifier': task.identifier(),
             'task_can_assign_to_self': api.can_assign_to_self(task, user),
-            'task_number_of_subtasks': task.number_of_subtasks,
             'subtasks': _task_template_values(subtasks, user),
             'parent_identifier': parent_identifier,
             'parent_title': parent_title,
@@ -279,7 +279,6 @@ class TaskMoveView(webapp.RequestHandler):
             'task_title' : task.title(),
             'task_description': task.description_body(),
             'task_identifier': task.identifier(),
-            'task_num_subtasks': task.number_of_subtasks(),
             'tasks': _task_template_values(tasks, user),
             }
         path = os.path.join(os.path.dirname(__file__),
