@@ -121,18 +121,13 @@ class Overview(webapp.RequestHandler):
     created new tasks with.
     """
     def get(self, domain_identifier):
-        session = Session(writer='cookie',
-                          wsgiref_headers=self.response.headers)
         user = api.get_and_validate_user(domain_identifier)
         if not user:
             self.error(404)     # hides domain identifiers
             return
-
-        domain = api.get_domain(domain_identifier)
-        view = self.request.get('view', 'all')
         session = Session(writer='cookie',
                           wsgiref_headers=self.response.headers)
-
+        view = self.request.get('view', 'all')
         domain = api.get_domain(domain_identifier)
         if view == 'yours':
             tasks = api.get_assigned_tasks(domain_identifier,
