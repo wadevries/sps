@@ -631,19 +631,17 @@ def get_open_tasks(domain_identifier,
         query = TaskIndex.all(keys_only=True).\
             ancestor(Domain.key_from_name(domain_identifier)).\
             filter('assignee_count =', 0).\
-            filter('completed =', False)
+            filter('completed =', False).\
+            filter('atomic =', True)
         if root_task:
             query.filter('hierarchy =', root_task.identifier())
         fetched = query.fetch(limit)
         tasks = Task.get([key.parent() for key in fetched])
-        minimum_level = root_task.hierarchy_level() + 1 if root_task else 0
-        return _group_tasks(tasks,
-                            complete_hierarchy=True,
-                            domain=domain_identifier,
-                            min_task_level=minimum_level,
-                            inverted=True)
-    return db.run_in_transaction(txn)
+        return tasks
 
+    tasks = db.run_in_transaction(txn)
+    _sort_tasks(tasks)
+    return tasks
 
 def get_assigned_tasks(domain_identifier,
                        user,
