@@ -645,74 +645,50 @@ def get_open_tasks(domain_identifier,
     return db.run_in_transaction(txn)
 
 
-def get_assigned_subtasks(task, user, limit=50, depth_limit=None):
+def get_assigned_tasks(domain_identifier,
+                       user,
+                       root_task=None,
+                       limit=50):
     """
-    Returns a list of all subtasks of the given task, that are assigned
-    to the given user.
+    Returns a list of all atomic subtasks of the given |root_task|, that
+    are assigned to the given |user|.
 
     This function will perform one query for each level of the subtask
     hierarchy.
 
     Args:
-        task: An instance of the Task model.
+        domain_identifier: The domain identifier string
         user: An instance of the user model.
+        root_task: The optional root task, that must be an ancestor
+            task of the returned tasks.
         limit: The maximum number of subtasks to return.
-        depth_limit: The maximum depth of subtasks in the task
-            hierarchy.
 
     Returns:
         A list with all subtasks of the given task.
 
     Raises:
-        ValueError: The depth_limit or limit are not positive integers
+        ValueError: The limit is not a positive integer, or the
+            user and root_task do not belong to the given domain.
     """
-    if not depth_limit:
-        #  ListProperties cannot contain more than 5000 elements anyway
-        depth_limit = 5000
-    if depth_limit < 0 or limit < 0:
-        raise ValueError("Invalid limits")
+    if limit <= 0:
+        raise ValueError("Invalid limit %d" % limit)
+    if not member_of_domain(domain_identifier, user):
+        raise ValueError("User and domain do not match")
+    if root_task and root_task.domain_identifier() != domain_identifier:
+        raise ValueError("Root task and domain do not match")
 
-    task_level = task.hierarchy_level()
-    tasks = []
-    for depth in range(depth_limit):
+    def txn():
         query = TaskIndex.all(keys_only=True).\
-            ancestor(Domain.key_from_name(task.domain_identifier())).\
-            filter('level = ', task_level + depth + 1).\
-            filter('hierarchy = ', task.identifier()).\
-            filter('assignees = ', user.identifier())
+            ancestor(Domain.key_from_name(domain_identifier)).\
+            filter('assignees =', user.identifier()).\
+            filter('atomic =', True)
+        if root_task:
+            query.filter('hierarchy =', root_task.identifier())
         fetched = query.fetch(limit)
-        tasks.extend(Task.get([key.parent() for key in fetched]))
-        limit = limit - len(fetched)
-        if not fetched or limit < 1:
-            break               # stop
+        tasks = Task.get([key.parent() for key in fetched])
+        return tasks
 
-    _sort_tasks(tasks)
-    return _group_tasks(tasks)
-
-
-def get_assigned_toplevel_tasks(domain, user, limit=50):
-    """Returns all top level tasks, which has a subtasks that is assigned
-    to |user| in |domain|. The subtask can be arbitrarily deep in the
-    hierarchy.
-
-    Args:
-        domain: The domain identifier string
-        user: An instance of the User model
-        limit: The maximum number of results that will be returned
-
-    Returns:
-        A list of tasks instances that the given |user| is the assignee for
-        and has not yet completed. The tasks will returned in the order
-        of the hierarchy, and then on time, with newest tasks first.
-    """
-    query = TaskIndex.all(keys_only=True).\
-        ancestor(Domain.key_from_name(domain)).\
-        filter('level = ', 0).\
-        filter('assignees = ', user.identifier())
-    fetched = query.fetch(limit)
-    tasks = [task
-             for task in Task.get([key.parent() for key in fetched])
-             if task]
+    tasks = db.run_in_transaction(txn)
     _sort_tasks(tasks)
     return tasks
 

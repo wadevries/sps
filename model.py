@@ -390,11 +390,12 @@ class TaskIndex(db.Model):
     # The level in the hierarchy of this index. Equivalent to the
     # number of items in the hierarchy list.
     level = aetycoon.LengthProperty(hierarchy)
-    # An ordered list of identifiers of all users that are
-    # participating in this task, because they are assigned to an
-    # atomic subtask.
+    # An list of identifiers of all users that are participating in
+    # this task, because they are assigned to an atomic subtask.
     assignees = db.StringListProperty(default=[])
     # The size of the assignees list
     assignee_count = aetycoon.LengthProperty(assignees)
     # Whether the associated task is completed.
     completed = db.BooleanProperty(default=False)
+    # Whether the associated task is an atomic task.
+    atomic = db.BooleanProperty(default=False)

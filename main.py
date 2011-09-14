@@ -135,7 +135,10 @@ class Overview(webapp.RequestHandler):
 
         domain = api.get_domain(domain_identifier)
         if view == 'yours':
-            tasks = api.get_assigned_toplevel_tasks(domain_identifier, user)
+            tasks = api.get_assigned_tasks(domain_identifier,
+                                           user,
+                                           root_task=None,
+                                           limit=200)
             no_tasks_message = "You do not have any unfinished tasks"
             tasks_heading = "Your Tasks"
         elif view == 'open':
@@ -183,7 +186,10 @@ class TaskDetail(webapp.RequestHandler):
         user = api.get_logged_in_user()
         domain = api.get_domain(domain_identifier)
         if view == 'yours':
-            subtasks = api.get_assigned_subtasks(task, user, depth_limit=1)
+            subtasks = api.get_assigned_tasks(domain_identifier,
+                                              user,
+                                              root_task=task,
+                                              limit=200)
             subtasks_heading = "Subtasks of '%s' Assigned to You" % task.title()
             no_subtasks_description = "No subtasks are assigned to you."
         elif view == 'open':

@@ -118,6 +118,7 @@ class UpdateTaskCompletion(webapp.RequestHandler):
                 index.assignees = list(assignees.iterkeys())
             task.put()
             index.completed = task.is_completed()
+            index.atomic = task.atomic()
             index.put()
             # Propagate further upwards
             if task.parent_task_identifier():
