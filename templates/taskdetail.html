@@ -20,7 +20,7 @@
 
 <h2>{{ task_title|escape }}</h2>
 {% if parent_identifier %}
-<p>Subtask of <a href="/d/{{ domain_identifier }}/task/{{ parent_identifier }}">{{ parent_title }}</a></p>
+<p>Subtask of <a href="/d/{{ domain_identifier }}/task/{{ parent_identifier }}?view={{ view_mode }}">{{ parent_title }}</a></p>
 {% else %}
 <p>Back to <a href="/d/{{ domain_identifier }}">task overview</a></p>
 {% endif %}
@@ -47,15 +47,11 @@ Description:<br>
 <hr>
 
 {% if task_number_of_subtasks > 0 %}
-<table>
-  <tr>
-    <td><a href="/d/{{ domain_identifier }}/task/{{ task_identifier }}">Your Subtasks</a></td>
-    <td><a href="/d/{{ domain_identifier }}/task/{{ task_identifier }}?view=open">Open Subtasks</a></td>
-    <td><a href="/d/{{ domain_identifier }}/task/{{ task_identifier }}?view=all">All Subtasks</a></td>
-  </tr>
-</table>
+<p>
+Show: <a href="/d/{{ domain_identifier }}/task/{{ task_identifier }}?view=all">All Tasks</a>
+, <a href="/d/{{ domain_identifier }}/task/{{ task_identifier }}?view=open">Open Tasks</a>
+, <a href="/d/{{ domain_identifier }}/task/{{ task_identifier }}?view=yours">Your Tasks</a>
 
-<hr>
 <h3>{{ subtasks_heading }}</h3>
 <table>
   {% for task in subtasks %}

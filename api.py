@@ -595,56 +595,55 @@ def get_all_subtasks(task, limit=50, depth_limit=None):
     _sort_tasks(tasks)
     return _group_tasks(tasks)
 
-def get_open_subtasks(task, limit=50, depth_limit=None):
+
+
+def get_open_tasks(domain_identifier,
+                   root_task=None,
+                   limit=50):
     """
-    Returns all subtasks of task that are not yet completed and not
-    assigned to anyone.
+    Returns all open tasks that are subtasks of the |root_task|.
+    If no |root_task| is provided, it will return all open tasks
+    in the domain. Open tasks are tasks that are not yet completed
+    and not assigned to anyone. The complete hierarchy of tasks
+    will be returned, up to the root task.
 
     Args:
-        task: An instance of the Task model.
-        limit: The maximum number of subtasks to return.
-        depth_limit: The maximum depth of subtasks in the task
-            hierarchy.
+        domain_identifier: The domain identifier string. Must be
+            the same domain as the root_task, if provided.
+        root_task: An instance of the Task model. Can be None.
+        limit: Approximate maximum number of tasks to return.
 
     Returns:
         A list of Task model instances that are not yet completed
-        and do not have an assignee. All tasks are subtasks of the
-        given tasks.
+        and do not have an assignee. The list will be ordered
+        as an inverted tree, ie the subtasks will appear before their
+        parent tasks in the list.
     """
-    if not depth_limit:
-        depth_limit = 5000
-    if depth_limit < 0 or limit < 0:
-        raise ValueError("Invalid limits")
+    if limit <= 0:
+        raise ValueError("Invalid limit %d" % limit)
+    if root_task and root_task.domain_identifier() != domain_identifier:
+        raise ValueError("Domains do not match")
 
-    # As open tasks cannot be queried yet through the TaskIndex,
-    # all tasks are retrieved and then filtered in memory.
-    task_level = task.hierarchy_level()
-    domain_identifier = task.domain_identifier()
-    task_identifier = task.identifier()
     def txn():
-        # Temporarily limit increase, as its too easy to miss
-        # an open task if the limit is low...
-        task_limit = limit + 100
-        tasks = []
-        for depth in range(depth_limit):
-            query = TaskIndex.all(keys_only=True).\
-                ancestor(Domain.key_from_name(domain_identifier)).\
-                filter('level = ', task_level + depth + 1).\
-                filter('hierarchy = ', task_identifier)
-            fetched = query.fetch(task_limit)
-            tasks.extend(Task.get([key.parent() for key in fetched]))
-            task_limit = task_limit - len(fetched)
-            if not fetched or limit < 1:
-                break               # stop
-        tasks = [task for task in tasks if task.open()]
-        _sort_tasks(tasks)
-        grouped = _group_tasks(tasks,
-                               complete_hierarchy=True,
-                               min_task_level=task_level + 1,
-                               domain=domain_identifier)
-        return grouped
-
+        # TODO(tijmen): The query actually also returns composite
+        # tasks that are 'open'. At this moment, it is not a
+        # problem, as they must be part of the hierarchy.
+        query = TaskIndex.all(keys_only=True).\
+            ancestor(Domain.key_from_name(domain_identifier)).\
+            filter('assignee_count =', 0).\
+            filter('completed =', False)
+        if root_task:
+            query.filter('hierarchy =', root_task.identifier())
+        fetched = query.fetch(limit)
+        tasks = Task.get([key.parent() for key in fetched])
+        minimum_level = root_task.hierarchy_level() + 1 if root_task else 0
+        return _group_tasks(tasks,
+                            complete_hierarchy=True,
+                            domain=domain_identifier,
+                            min_task_level=minimum_level,
+                            inverted=True)
     return db.run_in_transaction(txn)
+
 
 def get_assigned_subtasks(task, user, limit=50, depth_limit=None):
     """
@@ -689,31 +688,6 @@ def get_assigned_subtasks(task, user, limit=50, depth_limit=None):
 
     _sort_tasks(tasks)
     return _group_tasks(tasks)
-
-
-def get_all_open_tasks(domain):
-    """
-    Returns all tasks from |domain| that are not yet completed and not
-    assigned to anyone.
-
-    Args:
-        domain: The domain identifier string
-
-    Returns:
-        A list of Task model instances that are not yet completed
-        and do not have an assignee. The tasks will be ordered on
-        hierarchy.
-    """
-    def txn():
-        query = Task.all().ancestor(Domain.key_from_name(domain)).\
-            filter('derived_number_of_subtasks =', 0).\
-            filter('derived_completed =', False).\
-            filter('assignee =', None).\
-            order('-time')
-        return _group_tasks(query.fetch(50),
-                            complete_hierarchy=True,
-                            domain=domain)
-    return db.run_in_transaction(txn)
 
 
 def get_assigned_toplevel_tasks(domain, user, limit=50):
@@ -764,7 +738,7 @@ def get_all_direct_subtasks(domain_identifier, root_task=None, limit=100):
         tasks first.
     """
     query = Task.all().\
-        ancestor(Domain.key_from_name(domain)).\
+        ancestor(Domain.key_from_name(domain_identifier)).\
         filter('parent_task = ', root_task)
     tasks = query.fetch(limit)
     _sort_tasks(tasks)
@@ -774,7 +748,8 @@ def get_all_direct_subtasks(domain_identifier, root_task=None, limit=100):
 def _group_tasks(tasks,
                  complete_hierarchy=False,
                  domain=None,
-                 min_task_level=0):
+                 min_task_level=0,
+                 inverted=False):
     """
     Reorders the list of tasks such that supertasks are listed before
     their subtasks.
@@ -797,10 +772,14 @@ def _group_tasks(tasks,
             returned as part of the hierarchy. Tasks with a level lower
             than this level will not be returned, nor fetched when
             complete_hierarchy is set to True.
+        inverted: If set to true, the results will be ordered as if the
+            tree was inverted: ie. subtasks will appear before their
+            parent tasks in the list.
 
     Returns:
         A list of Task model instances, ordered such that supertasks are
-        before their subtasks.
+        before their subtasks. If inverted is set to true, the ordering
+        will be such that subtasks appear before their parent tasks.
 
     Raises:
         ValueError: If complete_hierarchy is enabled but not domain
@@ -831,6 +810,10 @@ def _group_tasks(tasks,
             for child in self.children:
                 child.pre_order(output)
 
+        def post_order(self, output):
+            for child in self.children:
+                child.post_order(output)
+            output.append(self.value)
 
     def fetch_tree(task_identifier):
         if not task_identifier:
@@ -857,6 +840,9 @@ def _group_tasks(tasks,
         fetch_tree(task.identifier())
     output = []
     for root in roots:
-        root.pre_order(output)
+        if not inverted:
+            root.pre_order(output)
+        else:
+            root.post_order(output)
     return output
 

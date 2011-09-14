@@ -52,7 +52,7 @@ def get_and_delete_messages(session):
     return messages
 
 
-def _task_template_values(tasks, user):
+def _task_template_values(tasks, user, invert_levels=False):
     """
     Returns a list of dictionaries containing the template values for
     each task.
@@ -64,7 +64,8 @@ def _task_template_values(tasks, user):
     Returns a list of dictionaries for each task, in the same order.
     """
     return [{ 'title': task.title(),
-              'levels': range(task.hierarchy_level()),
+              # TODO(tijmen): Property fix the levels
+              'levels': range(0),
               'completed': task.is_completed(),
               'is_assigned': task.assignee_key() != None,
               'can_assign_to_self': api.can_assign_to_self(task, user),
@@ -151,7 +152,9 @@ class OpenTasksOverview(webapp.RequestHandler):
             return
 
         domain = api.get_domain(domain_identifier)
-        open_tasks = api.get_all_open_tasks(domain_identifier)
+        open_tasks = api.get_open_tasks(domain_identifier,
+                                        root_task=None,
+                                        limit=200)
         template_values = {
             'domain_name': domain.name,
             'domain_identifier': domain_identifier,
@@ -198,7 +201,7 @@ class TaskDetail(webapp.RequestHandler):
     def get(self, domain_identifier, task_identifier):
         task = api.get_task(domain_identifier, task_identifier)
         user = api.get_and_validate_user(domain_identifier)
-        view = self.request.get('view')
+        view = self.request.get('view', 'all')
         if not task or not user:
             self.error(404)
             return
@@ -206,20 +209,22 @@ class TaskDetail(webapp.RequestHandler):
                           wsgiref_headers=self.response.headers)
         user = api.get_logged_in_user()
         domain = api.get_domain(domain_identifier)
-        if view == 'all':
+        if view == 'yours':
+            subtasks = api.get_assigned_subtasks(task, user, depth_limit=1)
+            subtasks_heading = "Subtasks of '%s' Assigned to You" % task.title()
+            no_subtasks_description = "No subtasks are assigned to you."
+        elif view == 'open':
+            subtasks = api.get_open_tasks(domain_identifier,
+                                          root_task=task,
+                                          limit=200)
+            subtasks_heading = "Open Subtasks of '%s'" % task.title()
+            no_subtasks_description = "No open subtasks for this task."
+        else:                   # view == 'all' or None
             subtasks = api.get_all_direct_subtasks(domain_identifier,
                                                    root_task=task,
                                                    limit=200)
             subtasks_heading = "All Subtasks of '%s'" % task.title()
             no_subtasks_description = "No subtasks for this task."
-        elif view == 'open':
-            subtasks = api.get_open_subtasks(task)
-            subtasks_heading = "Open Subtasks of '%s'" % task.title()
-            no_subtasks_description = "No open subtasks for this task."
-        else:  # 'yours' or None
-            subtasks = api.get_assigned_subtasks(task, user, depth_limit=1)
-            subtasks_heading = "Subtasks of '%s' Assigned to You" % task.title()
-            no_subtasks_description = "No subtasks assigned to you."
 
         parent_task = task.parent_task
         parent_identifier = parent_task.identifier() if parent_task else ""
@@ -227,6 +232,7 @@ class TaskDetail(webapp.RequestHandler):
         template_values = {
             'domain_name': domain.name,
             'domain_identifier': domain_identifier,
+            'view_mode': view,
             'user_name': user.name,
             'user_identifier': user.identifier(),
             'messages': get_and_delete_messages(session),

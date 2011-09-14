@@ -368,3 +368,5 @@ class TaskIndex(db.Model):
     assignees = db.StringListProperty(default=[])
     # The size of the assignees list
     assignee_count = aetycoon.LengthProperty(assignees)
+    # Whether the associated task is completed.
+    completed = db.BooleanProperty(default=False)
