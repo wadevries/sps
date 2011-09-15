@@ -197,9 +197,12 @@ class TaskDetail(webapp.RequestHandler):
             subtasks_heading = "Open Subtasks of '%s'" % task.title()
             no_subtasks_description = "No open subtasks for this task."
         else:                   # view == 'all' or None
+            view = 'all'
+            user_id = user.identifier()
             subtasks = api.get_all_direct_subtasks(domain_identifier,
                                                    root_task=task,
-                                                   limit=200)
+                                                   limit=200,
+                                                   user_identifier=user_id)
             subtasks_heading = "All Subtasks of '%s'" % task.title()
             no_subtasks_description = "No subtasks for this task."
 

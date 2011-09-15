@@ -534,38 +534,6 @@ def create_domain(domain, domain_title, user):
     return new_domain
 
 
-def _sort_tasks(tasks, user_identifier=None):
-    """
-    Sorts the list of Task instances, in place, on their completion
-    state,and finally on time, with the newer tasks first. If
-    |user_identifier| is provided, the tasks will be sorted on their
-    active state after being sorted on completion.
-
-    Args:
-        tasks: A list of Task model instances
-        user_identifier: Optional user identifier string
-
-    Returns:
-        Nothing. The list is sorted in place.
-    """
-    def task_cmp_active(t1, t2):
-        c = cmp(t1.is_completed(), t2.is_completed())
-        if c:
-            return c
-        c = -cmp(t1.is_active(user_identifier), t2.is_active(user_identifier))
-        if c:
-            return c
-        return -cmp(t1.time, t2.time)
-
-    def task_cmp(t1, t2):
-        c = cmp(t1.is_completed(), t2.is_completed())
-        if c:
-            return c
-        return -cmp(t1.time, t2.time)
-
-    tasks.sort(cmp=(task_cmp_active if user_identifier else task_cmp))
-
-
 def get_open_tasks(domain_identifier,
                    root_task=None,
                    limit=50):
@@ -594,9 +562,6 @@ def get_open_tasks(domain_identifier,
         raise ValueError("Domains do not match")
 
     def txn():
-        # TODO(tijmen): The query actually also returns composite
-        # tasks that are 'open'. At this moment, it is not a
-        # problem, as they must be part of the hierarchy.
         query = TaskIndex.all(keys_only=True).\
             ancestor(Domain.key_from_name(domain_identifier)).\
             filter('assignee_count =', 0).\
@@ -611,6 +576,7 @@ def get_open_tasks(domain_identifier,
     tasks = db.run_in_transaction(txn)
     _sort_tasks(tasks)
     return tasks
+
 
 def get_assigned_tasks(domain_identifier,
                        user,
@@ -689,8 +655,31 @@ def get_all_direct_subtasks(domain_identifier,
         ancestor(Domain.key_from_name(domain_identifier)).\
         filter('parent_task = ', root_task)
     tasks = query.fetch(limit)
-    _sort_tasks(tasks, user_identifier)
+    _sort_tasks(tasks, user_identifier=user_identifier)
     return tasks
+
+
+def _sort_tasks(tasks, user_identifier=None):
+    """
+    Sorts the list of Task instances, in place, on their completion
+    state,and finally on time, with the newer tasks first. If
+    |user_identifier| is provided, the tasks will be sorted on their
+    active state after being sorted on completion.
+
+    Args:
+        tasks: A list of Task model instances
+        user_identifier: Optional user identifier string
+
+    Returns:
+        Nothing. The list is sorted in place.
+    """
+    def task_cmp(t1, t2):
+        return (cmp(t1.is_completed(), t2.is_completed())
+                or -cmp(t1.is_active(user_identifier),
+                        t2.is_active(user_identifier))
+                or cmp(t1.time, t2.time))
+
+    tasks.sort(cmp=task_cmp)
 
 
 def _group_tasks(tasks,
