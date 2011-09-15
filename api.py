@@ -677,7 +677,7 @@ def _sort_tasks(tasks, user_identifier=None):
         return (cmp(t1.is_completed(), t2.is_completed())
                 or -cmp(t1.is_active(user_identifier),
                         t2.is_active(user_identifier))
-                or cmp(t1.time, t2.time))
+                or -cmp(t1.time, t2.time))
 
     tasks.sort(cmp=task_cmp)
 
