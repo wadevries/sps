@@ -77,6 +77,7 @@ class UpdateTaskCompletion(webapp.RequestHandler):
                 task.derived_completed = task.completed
                 task.derived_size = 1
                 task.derived_atomic_task_count = 1
+                task.derived_has_open_tasks = task.open()
                 assignee_identifier = task.assignee_identifier()
                 if assignee_identifier:
                     index.assignees = [assignee_identifier]
@@ -99,6 +100,8 @@ class UpdateTaskCompletion(webapp.RequestHandler):
                 task.derived_size = 1 + sum(t.derived_size for t in subtasks)
                 task.derived_atomic_task_count = sum(t.atomic_task_count()
                                                      for t in subtasks)
+                task.derived_has_open_tasks = any(t.has_open_tasks()
+                                                  for t in subtasks)
                 # Compute derived assignees, and sum the total of all
                 # their assigned and completed subtasks.
                 assignees = {}
@@ -118,6 +121,7 @@ class UpdateTaskCompletion(webapp.RequestHandler):
                 index.assignees = list(assignees.iterkeys())
             task.put()
             index.completed = task.is_completed()
+            index.has_open_tasks = task.has_open_tasks()
             index.atomic = task.atomic()
             index.put()
             # Propagate further upwards

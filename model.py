@@ -221,6 +221,10 @@ class Task(db.Model):
     #  all: an integer describing the total number of atomic subtasks
     #     assigned to this assignee.
     derived_assignees = JsonProperty(default={})
+    # Whether or not the task has one or more open tasks. If this
+    # task is an open atomic task, then this value is also True.
+    derived_has_open_tasks = db.BooleanProperty(default=False)
+
 
     def identifier(self):
         """Returns a string with the task identifier"""
@@ -384,6 +388,13 @@ class Task(db.Model):
         """The total number of subtasks of this task."""
         return self.derived_size - 1
 
+    def has_open_tasks(self):
+        """
+        Returns true if this task contains one or more open tasks, or
+        is an open tasks itself.
+        """
+        return self.derived_has_open_tasks
+
     def atomic_task_count(self):
         """Returns the total number of atomic tasks in this task hierarchy."""
         return self.derived_atomic_task_count
@@ -419,3 +430,5 @@ class TaskIndex(db.Model):
     completed = db.BooleanProperty(default=False)
     # Whether the associated task is an atomic task.
     atomic = db.BooleanProperty(default=False)
+    # Mirrors the |derived_has_open_tasks| property of the Task.
+    has_open_tasks = db.BooleanProperty(default=False)

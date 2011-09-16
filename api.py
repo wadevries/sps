@@ -616,8 +616,7 @@ def get_open_tasks(domain_identifier,
         level = root_task.hierarchy_level() + 1 if root_task else 0
         query = TaskIndex.all(keys_only=True).\
             ancestor(Domain.key_from_name(domain_identifier)).\
-            filter('assignee_count =', 0).\
-            filter('completed =', False).\
+            filter('has_open_tasks =', True).\
             filter('level =', level)
         if root_task:
             query.filter('hierarchy =', root_task.identifier())
