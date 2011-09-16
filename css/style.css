@@ -4,19 +4,21 @@ textarea { width: 600px; height: 60px; }
 
 td.checkbox { width: 60px; }
 
-td.task-title { width: 400px; }
+td.task-title { width: 360px; }
 
 tr.inactive-task-row { color: gray }
 
+td.nav-link { width: 80px; }
+
 td.task-detail { width: 200px; }
 
-td.assign-button { width: 140px; }
+td.assign-button { width: 100px; }
 
-td.assignee { width: 140px; }
+td.assignee { width: 100px; }
 
 td.task-title a {
-  text-decoration: none;
   color: inherit;
+  text-decoration: none;
 }
 
 td.task-title a:hover {

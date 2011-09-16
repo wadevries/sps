@@ -27,6 +27,11 @@
                 addClickHandlers()
               });
       });
+
+      $("tr.task-row").unbind('hover').hover(function() {
+        $("#details-link", this).show() },
+        function() { $("#details-link", this).hide()
+      });
     }
 
     $(document).ready(function() {
