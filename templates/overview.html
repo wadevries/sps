@@ -1,17 +1,7 @@
 {% include 'sps-header.html' %}
 
-<h3>New Task</h3>
-<form action="/create-task" method="post">
-Task description. The first line of the description will be used as the
-title of the task.
-<textarea  name="description"></textarea><br>
-<input type="checkbox" name="assign_to_self" checked> assign task to yourself<br>
-<input type="hidden" name="domain" value="{{ domain_identifier }}">
-<input type="submit" value="Create Task" />
-</form>
-<br>
+{% include 'new-task.html' %}
 
-<hr>
 <p>
 Show: <a href="/d/{{ domain_identifier }}?view=all">All Tasks</a>
 , <a href="/d/{{ domain_identifier }}?view=open">Open Tasks</a>

@@ -6,6 +6,19 @@
   <link rel="stylesheet" href="/css/style.css" type="text/css">
   <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.5.1/jquery.min.js"></script>
   <script type="text/javascript">
+    function addEnterKeyHandler() {
+      $(document).keyup(function(e) {
+        if (e.which == 13 && !$("#new-task-form").is(":visible:")) {
+          toggleCreateTaskForm()
+        }
+      });
+    }
+
+    function toggleCreateTaskForm() {
+      $("#new-task-container").slideToggle(100);
+      $("#description-textarea").select();
+    }
+
     function addClickHandlers() {
       $("input[type=checkbox][@name=completed]").unbind('click').click(function() {
         $.post('/set-task-completed', { id: $(this).attr("value"), completed: this.checked, domain: "{{ domain_identifier }}" });
@@ -35,9 +48,17 @@
     }
 
     $(document).ready(function() {
+      $("#new-task-container").hide();
+      $("#new-task-title").unbind('click').click(toggleCreateTaskForm)
       addClickHandlers()
-    });
+      addEnterKeyHandler()
 
+      $("#description-textarea").keydown(function (e) {
+        if (e.ctrlKey && e.which == 13) {
+          $("#new-task-form").submit()
+        }
+      });
+    });
   </script>
 </head>
 <body>

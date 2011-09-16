@@ -1,6 +1,6 @@
 body { width: 800px; margin: 0 auto; }
 
-textarea { width: 600px; height: 60px; }
+textarea { width: 800px; height: 100px; }
 
 td.checkbox { width: 60px; }
 
@@ -44,6 +44,15 @@ td.level3 {
 a.plain {
   color: inherit;
   text-decoration: none;
+}
+
+.new-task-title {
+  font-size: 18;
+  margin-bottom: 0.5em;
+}
+
+.new-task-title:hover {
+  background-color: #E5ECF9;
 }
 
 .empty-subtasks { width: 800px; height: 60px; }
