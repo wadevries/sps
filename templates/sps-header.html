@@ -6,11 +6,33 @@
   <link rel="stylesheet" href="/css/style.css" type="text/css">
   <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.5.1/jquery.min.js"></script>
   <script type="text/javascript">
-    $(document).ready(function() {
-      $("input[type=checkbox]").click(function() {
+    function addClickHandlers() {
+      $("input[type=checkbox][@name=completed]").unbind('click').click(function() {
         $.post('/set-task-completed', { id: $(this).attr("value"), completed: this.checked, domain: "{{ domain_identifier }}" });
       });
+
+      $("a.expandable").unbind('click').click(function(e) {
+        e.preventDefault()
+        var $row = $(this).parent().parent()
+        var level = $row.attr("level")
+        if ($row.hasClass("expanded")) { return true; }
+        $row.addClass("expanded")
+        $.get("/get-subtasks",
+              { 'domain': "{{ domain_identifier }}",
+                'task': $(this).attr("value"),
+                'view': $(this).attr("view"),
+                'level': level },
+              function(data) {
+                $row.after(data);
+                addClickHandlers()
+              });
+      });
+    }
+
+    $(document).ready(function() {
+      addClickHandlers()
     });
+
   </script>
 </head>
 <body>

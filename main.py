@@ -52,7 +52,7 @@ def get_and_delete_messages(session):
     return messages
 
 
-def _task_template_values(tasks, user, invert_levels=False):
+def _task_template_values(tasks, user, level=0):
     """
     Returns a list of dictionaries containing the template values for
     each task.
@@ -65,8 +65,9 @@ def _task_template_values(tasks, user, invert_levels=False):
     """
     user_identifier = user.identifier()
     return [{ 'title': task.title(),
-              # TODO(tijmen): Property fix the levels
-              'levels': range(0),
+              # TODO(tijmen): Properly fix the levels. This value
+              # is passed so the template renders the proper indentation
+              'levels': range(level+1),
               'completed': task.is_completed(),
               'is_assigned': task.assignee_key() != None,
               'can_assign_to_self': api.can_assign_to_self(task, user),
@@ -74,6 +75,7 @@ def _task_template_values(tasks, user, invert_levels=False):
               'can_complete': api.can_complete_task(task, user),
               'summary': task.personalized_summary(user_identifier),
               'active': task.is_active(user_identifier),
+              'atomic': task.atomic(),
               'id': task.identifier() }
             for task in tasks]
 
@@ -229,9 +231,57 @@ class TaskDetail(webapp.RequestHandler):
             'subtasks_heading': subtasks_heading,
             'no_subtasks_description': no_subtasks_description,
             }
-        path = os.path.join(os.path.dirname(__file__),
-                            'templates/taskdetail.html')
-        self.response.out.write(template.render(path, template_values))
+        self.response.out.write(render_template('templates/taskdetail.html',
+                                                template_values))
+
+
+class GetSubTasks(webapp.RequestHandler):
+    """
+    Handler for AJAX-requests to retrieve the direct subtasks of a
+    task.  The returned output are html rows used in the task tables.
+
+    The handler requires 3 GET parametesr:
+        domain: The domain identifier string
+        task: The parent task identifier string
+        view: The type of requested subtasks: all, open or yours.
+    """
+    def get(self):
+        try:
+            domain_identifier = self.request.get('domain')
+            task_identifier = self.request.get('task')
+            view = self.request.get('view')
+            level = int(self.request.get('level', 0))
+        except (ValueError,TypeError):
+            self.error(400)
+            return
+        user = api.get_and_validate_user(domain_identifier)
+        if not user:
+            self.error(403)
+            return
+
+        domain = api.get_domain(domain_identifier)
+        task = api.get_task(domain_identifier, task_identifier)
+        if view == 'yours':
+            tasks = api.get_assigned_tasks(domain_identifier,
+                                           user,
+                                           root_task=task,
+                                           limit=200)
+        elif view == 'open':
+            tasks = api.get_open_tasks(domain_identifier,
+                                       root_task=task,
+                                       limit=200)
+        else:                   # view == 'all' or None
+            user_id = user.identifier()
+            tasks = api.get_all_direct_subtasks(domain_identifier,
+                                                root_task=task,
+                                                limit=200,
+                                                user_identifier=user_id)
+
+        template_values = {
+            'tasks': _task_template_values(tasks, user, level=level+1),
+            }
+        self.response.out.write(render_template('templates/get-subtasks.html',
+                                                template_values))
 
 
 class TaskEditView(webapp.RequestHandler):
@@ -267,9 +317,8 @@ class TaskEditView(webapp.RequestHandler):
             'task_description': task.description,
             'task_identifier': task.identifier(),
             }
-        path = os.path.join(os.path.dirname(__file__),
-                            'templates/edittask.html')
-        self.response.out.write(template.render(path, template_values))
+        self.response.out.write(render_template('templates/edittask.html',
+                                                template_values))
 
 
 class TaskMoveView(webapp.RequestHandler):
@@ -300,9 +349,8 @@ class TaskMoveView(webapp.RequestHandler):
             'task_identifier': task.identifier(),
             'tasks': _task_template_values(tasks, user),
             }
-        path = os.path.join(os.path.dirname(__file__),
-                            'templates/movetask.html')
-        self.response.out.write(template.render(path, template_values))
+        self.response.out.write(render_template('templates/movetask.html',
+                                                template_values))
 
 
 class CreateTask(webapp.RequestHandler):
@@ -504,6 +552,7 @@ application = webapp.WSGIApplication([('/create-task', CreateTask),
                                       ('/edit-task', EditTask),
                                       ('/move-task', MoveTask),
                                       ('/create-domain', CreateDomain),
+                                      ('/get-subtasks', GetSubTasks),
                                       (_DOMAIN_URL, Overview),
                                       (_DOMAIN_ALL, Overview),
                                       (_DOMAIN_OPEN, Overview),
