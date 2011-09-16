@@ -73,6 +73,7 @@ class User(db.Model):
     name = db.StringProperty(required=True)
     # Whether the user has admin rights. Admins can edit tasks that
     # are not their own.
+    # DEPRECATED, do not use. Check the admins property in Domain
     admin = db.BooleanProperty(default=False)
     # A list of all domain identifiers (key names) that this user is
     # a member of.
@@ -90,6 +91,9 @@ class User(db.Model):
         the property.
         """
         return User.default_context.get_value_for_datastore(self)
+
+    def __str__(self):
+        return self.identifier()
 
 
 # JsonProperty, by Konstantin, original source at:

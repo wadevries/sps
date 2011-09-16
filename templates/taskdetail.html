@@ -31,19 +31,30 @@ Description:<br>
 <p>No extra description has been entered for this task.</p>
 {% endif %}
 
+
+<div class="taskfooter">
 {% if task_can_assign_to_self %}
+<div style="float: left;">
 <form action="/assign-task" method="post">
   <input type="submit" value="Assign to self">
   <input type="hidden" name="assignee" value="{{ user_identifier }}">
   <input type="hidden" name="id" value="{{ task_identifier }}">
   <input type="hidden" name="domain" value="{{ domain_identifier }}">
 </form>
+</div>
 {% else %}
-{% if task_assignee_description %}
-<p>Assigned to {{ task_assignee_description|escape }}</p>
+{% if task_assignee %}
+<div style="float: left;">
+  <p>Assigned to {{ task_assignee|escape }}</p>
+</div>
 {% endif %}
 {% endif %}
-
+{% if task_can_edit %}
+<div style="float: right;">
+  <a href="/d/{{ domain_identifier }}/task/{{ task_identifier }}/edit">edit this task</a>
+</div>
+{% endif %}
+</div>
 <hr>
 
 {% if task_has_subtasks %}
@@ -78,11 +89,6 @@ title of the task.
 <input type="submit" value="Create Task">
 </form>
 <br>
-
-<h3>Move Task</h3>
-<form action="/d/{{ domain_identifier }}/task/{{ task_identifier }}/move">
-<input type="submit" value="Move Task">
-</form>
 
 </body>
 </html>

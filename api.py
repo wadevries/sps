@@ -213,6 +213,30 @@ def can_assign_to_self(task, user):
     return can_assign_task(task, user, user)
 
 
+def can_edit_task(domain, task, user):
+    """
+    Returns true if the user can edit the given task. This function
+    returns true iff the user created the task, or if the user is
+    an admin in the domain of the task.
+
+    Args:
+       domain: An instance of the Domain model. Must be the
+           domain of the task.
+       task: An instance of the Task model
+       user: An instance of the User model
+
+    Returns:
+        True iff the user can edit the task.
+
+    Raises:
+        ValueError: If the domain and task do not match.
+    """
+    if domain.identifier() != task.domain_identifier():
+        raise ValueError("Task is not in the domain '%s'" % domain.identifier())
+    return (task.user_identifier == user.identifier()
+            or user.identifier() in domain.admins)
+
+
 def can_assign_task(task, user, assignee):
     """Checks whether a user can assign the task to assignee.
 
@@ -425,6 +449,35 @@ def _check_for_cycle(task, new_parent):
         else:
             new_parent = None
     return False
+
+
+def change_task_description(task, description, user):
+    """
+    Changes the description of |task| to description. The change will
+    be recorded by |user|. User must be able to edit the task.
+
+    Args:
+        task: An instance of the task model
+        description: The new description of the task
+        user: An instance of the user model.
+
+    Returns:
+        An instance of the task model, with the new description set. The
+        task will also be put to the datastore.
+
+    Raises:
+        ValueError: The user is not able to edit the task or the
+            description is empty.
+    """
+    domain = get_domain(task.domain_identifier())
+    if not can_edit_task(domain, task, user):
+        raise ValueError("User '%s' can not edit task '%s'", (user, task))
+    if not description:
+        raise ValueError("Cannot set description to the empty string")
+
+    task.description = description
+    task.put()
+    return task
 
 
 def change_task_parent(domain_identifier,

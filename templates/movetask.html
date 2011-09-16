@@ -8,17 +8,8 @@
   <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.5.1/jquery.min.js"></script>
 </head>
 <body>
-<h1><a href="/d/{{ domain_identifier }}/task/{{ task_identifier }}" class='plain'>{{ domain_name }}</a></h1>
-logged in as: <b> {{ user_name|escape }} </b>
-<hr>
 
-{% if messages %}
-<ul>
-{% for message in messages %}
-<li>{{ message }}</li>
-{% endfor %}
-</ul>
-{% endif %}
+{% include 'sps-header.html' %}
 
 <h3>Move Task</h3>
 <p>Move task '{{ task_title|escape }}' (and {{ task_num_subtasks }} subtask{{ task.num_subtasks|pluralize }}) as subtask of another task.</p>

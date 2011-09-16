@@ -222,6 +222,7 @@ class TaskDetail(webapp.RequestHandler):
             'task_identifier': task.identifier(),
             'task_has_subtasks': not task.atomic(),
             'task_can_assign_to_self': api.can_assign_to_self(task, user),
+            'task_can_edit': api.can_edit_task(domain, task, user),
             'subtasks': _task_template_values(subtasks, user),
             'parent_identifier': parent_identifier,
             'parent_title': parent_title,
@@ -230,6 +231,44 @@ class TaskDetail(webapp.RequestHandler):
             }
         path = os.path.join(os.path.dirname(__file__),
                             'templates/taskdetail.html')
+        self.response.out.write(template.render(path, template_values))
+
+
+class TaskEditView(webapp.RequestHandler):
+    """
+    Handler to show the edit task gui. It shows an editable
+    description of the task. Only a user that created the task
+    can edit it, or admins.
+
+    A POST request to this handler will put the actual changes
+    to database.
+    """
+    def get(self, domain_identifier, task_identifier):
+        task = api.get_task(domain_identifier, task_identifier)
+        user = api.get_and_validate_user(domain_identifier)
+        if not task or not user:
+            self.error(404)
+            return
+
+        session = Session(writer='cookie',
+                          wsgiref_headers=self.response.headers)
+        domain = api.get_domain(domain_identifier)
+        if not api.can_edit_task(domain, task, user):
+            self.error(403)
+            return
+
+        template_values = {
+            'domain_name': domain.name,
+            'domain_identifier': domain_identifier,
+            'user_name': user.name,
+            'user_identifier': user.identifier(),
+            'messages': get_and_delete_messages(session),
+            'task_title' : task.title(),
+            'task_description': task.description,
+            'task_identifier': task.identifier(),
+            }
+        path = os.path.join(os.path.dirname(__file__),
+                            'templates/edittask.html')
         self.response.out.write(template.render(path, template_values))
 
 
@@ -302,6 +341,39 @@ class CreateTask(webapp.RequestHandler):
             self.redirect('/d/%s/task/%s' % (domain, parent_identifier))
         else:
             self.redirect('/d/%s/' % domain)
+
+
+class EditTask(webapp.RequestHandler):
+    """
+    Handler for POST requests to edit a task.
+    """
+    def post(self):
+        try:
+            domain_identifier = self.request.get('domain')
+            task_identifier = self.request.get('task_id')
+        except (TypeError, ValueError):
+            self.error(400)
+            return
+
+        user = api.get_and_validate_user(domain_identifier)
+        task = api.get_task(domain_identifier, task_identifier)
+        if not task or not user:
+            logging.error("No task '%s' or user '%s'" % (task, user))
+            self.error(404)
+            return
+
+        self.session = Session(writer='cookie',
+                               wsgiref_headers=self.response.headers)
+        try:
+            description = self.request.get('description')
+            api.change_task_description(task, description, user)
+        except ValueError:
+            self.error(403)
+            self.response.out.write("Error while editing task: %s" % error)
+            return
+
+        add_message(self.session, "Task '%s' edited" % task.title())
+        self.redirect('/d/%s/task/%s' % (domain_identifier, task_identifier))
 
 
 class MoveTask(webapp.RequestHandler):
@@ -421,19 +493,21 @@ _DOMAIN_ALL = '/d/(%s)/all/?' % _VALID_DOMAIN_KEY_NAME
 _DOMAIN_OPEN = '/d/(%s)/open/?' % _VALID_DOMAIN_KEY_NAME
 
 _TASK_URL = '%s/task/(%s)/?' % (_DOMAIN_URL, _VALID_TASK_KEY_NAME)
-
-_TASK_MOVE_URL = "%s/move/?" % (_TASK_URL)
+_TASK_EDIT_URL = "%s/edit/?" % (_TASK_URL,)
+_TASK_MOVE_URL = "%s/move/?" % (_TASK_URL,)
 
 webapp.template.register_template_library('templatetags.templatefilters')
 
 application = webapp.WSGIApplication([('/create-task', CreateTask),
                                       ('/set-task-completed', CompleteTask),
                                       ('/assign-task', AssignTask),
+                                      ('/edit-task', EditTask),
                                       ('/move-task', MoveTask),
                                       ('/create-domain', CreateDomain),
                                       (_DOMAIN_URL, Overview),
                                       (_DOMAIN_ALL, Overview),
                                       (_DOMAIN_OPEN, Overview),
+                                      (_TASK_EDIT_URL, TaskEditView),
                                       (_TASK_MOVE_URL, TaskMoveView),
                                       (_TASK_URL, TaskDetail),
                                       ('/', Landing)])
