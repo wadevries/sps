@@ -1,7 +1,28 @@
+<html>
+<head>
+  <link rel="stylesheet" href="/css/blueprint/screen.css" type="text/css" media="screen, projection">
+  <link rel="stylesheet" href="/css/blueprint/print.css" type="text/css" media="print">
+  <!--[if lt IE 8]><link rel="stylesheet" href="/css/blueprint/ie.css" type="text/css" media="screen, projection"><![endif]-->
+  <link rel="stylesheet" href="/css/style.css" type="text/css">
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.5.1/jquery.min.js"></script>
+  <script type="text/javascript">
+    $(document).ready(function() {
+      $("input[type=checkbox]").click(function() {
+        $.post('/set-task-completed', { id: $(this).attr("value"), completed: this.checked, domain: "{{ domain_identifier }}" });
+      });
+    });
+  </script>
+</head>
+<body>
+
+<div style="float: left;">
 <h3>
-  <a href="/" class='plain' title="Back to overview">{{ domain_name|escape }}</a>
+  <a href="/d/{{ domain_identifier }}?view={{ view_mode }}" class='plain' title="Back to overview">{{ domain_name|escape }}</a>
 </h3>
-logged in as: <b> {{ user_name|escape }} </b>
+</div>
+<div style="float: right; margin-top: 1.5em'">
+logged in as: <b> {{ user_name|escape }}</b>
+</div>
 <hr>
 
 {% if messages %}
