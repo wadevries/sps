@@ -278,6 +278,10 @@ class GetSubTasks(webapp.RequestHandler):
 
         logging.info("OUTPUT LEVEL: %d" % (level+1,))
         template_values = {
+            'domain_name': domain.name,
+            'domain_identifier': domain_identifier,
+            'user_name': user.name,
+            'user_identifier': user.identifier(),
             'tasks': _task_template_values(tasks, user, level=level+1),
             }
         self.response.out.write(render_template('templates/get-subtasks.html',
