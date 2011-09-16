@@ -65,9 +65,8 @@ def _task_template_values(tasks, user, level=0):
     """
     user_identifier = user.identifier()
     return [{ 'title': task.title(),
-              # TODO(tijmen): Properly fix the levels. This value
-              # is passed so the template renders the proper indentation
-              'levels': range(level+1),
+              # There are only 4 levels available in the css
+              'level': min(level, 3),
               'completed': task.is_completed(),
               'is_assigned': task.assignee_key() != None,
               'can_assign_to_self': api.can_assign_to_self(task, user),
@@ -277,6 +276,7 @@ class GetSubTasks(webapp.RequestHandler):
                                                 limit=200,
                                                 user_identifier=user_id)
 
+        logging.info("OUTPUT LEVEL: %d" % (level+1,))
         template_values = {
             'tasks': _task_template_values(tasks, user, level=level+1),
             }

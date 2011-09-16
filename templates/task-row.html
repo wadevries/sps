@@ -1,11 +1,11 @@
-<tr {% if not task.active %}class="inactive-task-row"{% endif %} class="tawk-row" level={{ task.levels|last }}>
-  <td class="checkbox">
+<tr class="{% if not task.active %}inactive-task-row {% endif %}tawk-row" level={{ task.level }}>
+  <td class="checkbox level{{ task.level }}">
     <form>
-      {% for i in task.levels %}&nbsp;&nbsp;&nbsp;&nbsp;{% endfor %}<input type="checkbox" name="completed" value="{{ task.id }}" {% if task.completed %} checked {% endif %}{% if not task.can_complete %}disabled{% endif %}>
+      <input type="checkbox" name="completed" value="{{ task.id }}" {% if task.completed %} checked {% endif %}{% if not task.can_complete %}disabled{% endif %}>
     </form>
   </td>
-  <td class="task-title">
-    <a {% if not task.atomic %}class="expandable"{% endif %} value={{ task.id }} view={{ view_mode }}>
+  <td class="task-title level{{ task.level }}">
+    <a {% if not task.atomic %}class="expandable" href="#"{% endif %} value="{{ task.id }}" view="{{ view_mode }}">
       {{ task.title|escape }}
     </a>
   </td>
