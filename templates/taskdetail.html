@@ -18,18 +18,28 @@
 
 {% include 'sps-header.html' %}
 
-<h2>{{ task_title|escape }}</h2>
+<div class="breadcrumbs">
+<b>
 {% if parent_identifier %}
-<p>Subtask of <a href="/d/{{ domain_identifier }}/task/{{ parent_identifier }}?view={{ view_mode }}">{{ parent_title }}</a></p>
+<a href="/d/{{ domain_identifier }}/task/{{ parent_identifier }}?view={{ view_mode }}">{{ parent_title }}</a>
 {% else %}
-<p>Back to <a href="/d/{{ domain_identifier }}?view={{view_mode}}">task overview</a></p>
+<a href="/d/{{ domain_identifier }}?view={{view_mode}}">Task Overview</a>
 {% endif %}
+/ {{ task_title }}</b>
+</div>
+
+<div class="task-description">
+<h2>{{ task_title|escape }}</h2>
 {% if task_description %}
-Description:<br>
-<div class="taskdescription">{{ task_description|markdown }}</div>
+<div class="task-description-body">{{ task_description|markdown }}</div>
 {% else %}
-<p>No extra description has been entered for this task.</p>
+<div class="no-task-description-body">
+  <center>
+    <p>No extra description has been entered for this task.</p>
+  </center>
+</div>
 {% endif %}
+</div>
 
 
 <div class="taskfooter">
@@ -68,9 +78,9 @@ Show: <a href="/d/{{ domain_identifier }}/task/{{ task_identifier }}?view=all">A
   {% for task in subtasks %}
   {% include 'task-row.html' %}
   {% empty %}
-  <div class="empty-tasks-list">
+  <div class="no-tasks">
     <center>
-    <p>{{ no_subtasks_description }}</p>
+      <p>{{ no_subtasks_description }}</p>
     </center>
   </div>
   {% endfor %}

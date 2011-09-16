@@ -30,10 +30,22 @@ a.plain {
 
 .empty-subtasks { width: 800px; height: 60px; }
 
-.taskdescription {
-  border: 1px solid #ddd;
-/*  margin: 1em 1em;*/
-  padding: .5em;
+.task-description {
+  background-color: #E5ECF9;
+  margin-top: 1em;
+  margin-bottom: 1em;
+  padding-top: 0.5em;
+  padding-bottom: 0.5em;
+}
+
+.no-task-description-body {
+  padding-top: 1em;
+  padding-bottom: 1em;
+}
+
+.no-tasks {
+  padding-top: 1em;
+  padding-bottom: 1em;
 }
 
 .codehilitetable td.linenos {
