@@ -25,15 +25,19 @@ td.task-title a:hover {
   text-decoration: underline;
 }
 
-td.level0 {
+td.expand-control {
+  width: 15px;
+}
+
+.level0 {
   padding-left: 1em;
 }
 
-td.level1 {
+.level1 {
   padding-left: 2em;
 }
 
-td.level2 {
+.level2 {
   padding-left: 3em;
 }
 

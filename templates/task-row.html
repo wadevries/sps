@@ -1,16 +1,22 @@
 <tr class="{% if not task.active %}inactive-task-row {% endif %}task-row" level={{ task.level }}>
-  <td class="checkbox level{{ task.level }}">
+  <td class="checkbox">
+    <div class="level{{ task.level }}">
     <form>
       <input type="checkbox" name="completed" value="{{ task.id }}" {% if task.completed %} checked {% endif %}{% if not task.can_complete %}disabled{% endif %}>
     </form>
+    </div>
+  </td>
+  <td class="expand-control">
+    <div class="level{{ task.level }}">
+    {% if not task.atomic %}
+      <a class="expandable" href="#" value="{{ task.id }}" view="{{ view_mode }}">
+	<img width="12" height="12" src="/images/expand.png">
+      </a>
+    </div>
+    {% endif %}
   </td>
   <td class="task-title level{{ task.level }}">
-    <a {% if not task.atomic %}class="expandable" href="#"{% endif %} value="{{ task.id }}" view="{{ view_mode }}">
-      {{ task.title|escape }}
-    </a>
-  </td>
-  <td class="nav-link">
-    <a id="details-link" href="/d/{{ domain_identifier }}/task/{{ task.id }}?view={{ view_mode }}" style="display: none;">(view details)</a>
+    <a href="/d/{{ domain_identifier }}/task/{{ task.id }}?view={{ view_mode }}">{{ task.title|escape }}</a>
   </td>
   <td class="task-detail">
     {{ task.summary }}

@@ -7,14 +7,16 @@ builtins:
 - appstats: on
 
 handlers:
+- url: /images
+  static_dir: images
+- url: /css
+  static_dir: css
 - url: /mapreduce(/.*)?
   script: mapreduce/main.py
   login: admin
 - url: /workers/.*
   script: workers.py
   login: admin
-- url: /css
-  static_dir: css
 - url: /.*
   login: required
   script: main.py

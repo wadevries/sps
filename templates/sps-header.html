@@ -26,17 +26,19 @@
 
       $("a.expandable").unbind('click').click(function(e) {
         e.preventDefault()
-        var $row = $(this).parent().parent()
-        var level = $row.attr("level")
-        if ($row.hasClass("expanded")) { return true; }
-        $row.addClass("expanded")
+        var row = $(this).parent().parent().parent()
+        var level = row.attr("level")
+        if (row.hasClass("expanded")) { return true; }
+        row.addClass("expanded")
+        var image = $(this).children("img")
         $.get("/get-subtasks",
               { 'domain': "{{ domain_identifier }}",
                 'task': $(this).attr("value"),
                 'view': $(this).attr("view"),
                 'level': level },
               function(data) {
-                $row.after(data);
+                image.attr("src", "/images/open.png")
+                row.after(data);
                 addClickHandlers()
               });
       });
