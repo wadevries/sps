@@ -591,11 +591,10 @@ def get_open_tasks(domain_identifier,
                    root_task=None,
                    limit=50):
     """
-    Returns all open tasks that are subtasks of the |root_task|.
-    If no |root_task| is provided, it will return all open tasks
-    in the domain. Open tasks are tasks that are not yet completed
-    and not assigned to anyone. The complete hierarchy of tasks
-    will be returned, up to the root task.
+    Returns all open tasks that are direct subtasks of the
+    |root_task|.  If no |root_task| is provided, it will return all
+    open tasks in the domain. Open tasks are tasks that are not yet
+    completed and not assigned to anyone.
 
     Args:
         domain_identifier: The domain identifier string. Must be
@@ -605,9 +604,8 @@ def get_open_tasks(domain_identifier,
 
     Returns:
         A list of Task model instances that are not yet completed
-        and do not have an assignee. The list will be ordered
-        as an inverted tree, ie the subtasks will appear before their
-        parent tasks in the list.
+        and do not have an assignee, which are all direct subtasks
+        of the given |root_task|.
     """
     if limit <= 0:
         raise ValueError("Invalid limit %d" % limit)
@@ -615,11 +613,12 @@ def get_open_tasks(domain_identifier,
         raise ValueError("Domains do not match")
 
     def txn():
+        level = root_task.hierarchy_level() + 1 if root_task else 0
         query = TaskIndex.all(keys_only=True).\
             ancestor(Domain.key_from_name(domain_identifier)).\
             filter('assignee_count =', 0).\
             filter('completed =', False).\
-            filter('atomic =', True)
+            filter('level =', level)
         if root_task:
             query.filter('hierarchy =', root_task.identifier())
         fetched = query.fetch(limit)
@@ -636,11 +635,9 @@ def get_assigned_tasks(domain_identifier,
                        root_task=None,
                        limit=50):
     """
-    Returns a list of all atomic subtasks of the given |root_task|, that
-    are assigned to the given |user|.
-
-    This function will perform one query for each level of the subtask
-    hierarchy.
+    Returns a list of all direct subtasks of the given |root_task|, that
+    are either directly assigned to the given |user|, or is participating
+    in (because one of its atomic tasks is assigned to that user).
 
     Args:
         domain_identifier: The domain identifier string
@@ -650,7 +647,8 @@ def get_assigned_tasks(domain_identifier,
         limit: The maximum number of subtasks to return.
 
     Returns:
-        A list with all subtasks of the given task.
+        A list with all subtasks of the given |root_task| that are
+        assigned to the user.
 
     Raises:
         ValueError: The limit is not a positive integer, or the
@@ -664,10 +662,11 @@ def get_assigned_tasks(domain_identifier,
         raise ValueError("Root task and domain do not match")
 
     def txn():
+        level = root_task.hierarchy_level() + 1 if root_task else 0
         query = TaskIndex.all(keys_only=True).\
             ancestor(Domain.key_from_name(domain_identifier)).\
             filter('assignees =', user.identifier()).\
-            filter('atomic =', True)
+            filter('level =', level)
         if root_task:
             query.filter('hierarchy =', root_task.identifier())
         fetched = query.fetch(limit)
@@ -675,7 +674,7 @@ def get_assigned_tasks(domain_identifier,
         return tasks
 
     tasks = db.run_in_transaction(txn)
-    _sort_tasks(tasks)
+    _sort_tasks(tasks, user_identifier=user.identifier())
     return tasks
 
 
