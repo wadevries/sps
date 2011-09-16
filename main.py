@@ -275,8 +275,6 @@ class GetSubTasks(webapp.RequestHandler):
                                                 root_task=task,
                                                 limit=200,
                                                 user_identifier=user_id)
-
-        logging.info("OUTPUT LEVEL: %d" % (level+1,))
         template_values = {
             'domain_name': domain.name,
             'domain_identifier': domain_identifier,
