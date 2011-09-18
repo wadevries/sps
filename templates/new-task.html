@@ -1,8 +1,8 @@
 <div id="new-task-title" class="new-task-title">Create New Task</div>
 <div id="new-task-container" class="new-task-form">
   <form id="new-task-form" action="/create-task" method="post">
-    Task description. The first line of the description will be used as the
-    title of the task.
+    Enter a task description. The first line of the description will
+    be used as the title of the task.
     <textarea  id="description-textarea" name="description"></textarea><br>
     <input type="checkbox" name="assign_to_self" checked> assign task to yourself<br>
     <input type="hidden" name="domain" value="{{ domain_identifier }}">

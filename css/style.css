@@ -51,7 +51,9 @@ a.plain {
 }
 
 .new-task-title {
-  font-size: 18;
+  font-size: 16;
+  font-weight: bold;
+  color: #06C;
   margin-bottom: 0.5em;
 }
 
