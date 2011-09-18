@@ -27,7 +27,9 @@
               { 'domain': "{{ domain_identifier }}",
                 'task': $(this).attr("value"),
                 'view': $(this).attr("view"),
-                'level': level },
+                'level': level,
+                {% if show_radio_buttons %}'radio': 1{% endif %}
+                },
               function(data) {
                 image.attr("src", "/images/open.png")
                 row.after(data);

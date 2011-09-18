@@ -1,3 +1,7 @@
 {% for task in tasks %}
+{% if show_radio_buttons %}
+{% include 'task-row-radio.html' %}
+{% else %}
 {% include 'task-row.html' %}
+{% endif %}
 {% endfor %}
