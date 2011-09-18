@@ -6,14 +6,6 @@
   <link rel="stylesheet" href="/css/style.css" type="text/css">
   <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.5.1/jquery.min.js"></script>
   <script type="text/javascript">
-    function addEnterKeyHandler() {
-      $(document).keyup(function(e) {
-        if (e.which == 13 && !$("#new-task-form").is(":visible:")) {
-          toggleCreateTaskForm()
-        }
-      });
-    }
-
     function toggleCreateTaskForm() {
       $("#new-task-container").slideToggle(100);
       $("#description-textarea").select();
@@ -53,12 +45,19 @@
       $("#new-task-container").hide();
       $("#new-task-title").unbind('click').click(toggleCreateTaskForm)
       addClickHandlers()
-      addEnterKeyHandler()
+
+      $(document).keyup(function(e) {
+        if (e.which == 13 && !$("#new-task-form").is(":visible:")) {
+          toggleCreateTaskForm()
+        }
+      });
 
       $("#description-textarea").keydown(function (e) {
         if (e.ctrlKey && e.which == 13) {
           $("#new-task-form").submit()
+          return false
         }
+        return true
       });
     });
   </script>
