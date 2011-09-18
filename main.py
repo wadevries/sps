@@ -243,6 +243,9 @@ class GetSubTasks(webapp.RequestHandler):
         domain: The domain identifier string
         task: The parent task identifier string
         view: The type of requested subtasks: all, open or yours.
+        level: The level of the task in the interface. This value is
+           used to generate the property indentation in the template
+           rendering.
     """
     def get(self):
         try:
@@ -270,6 +273,7 @@ class GetSubTasks(webapp.RequestHandler):
                                        root_task=task,
                                        limit=200)
         else:                   # view == 'all' or None
+            view = 'all'
             user_id = user.identifier()
             tasks = api.get_all_direct_subtasks(domain_identifier,
                                                 root_task=task,
@@ -281,6 +285,7 @@ class GetSubTasks(webapp.RequestHandler):
             'user_name': user.name,
             'user_identifier': user.identifier(),
             'tasks': _task_template_values(tasks, user, level=level+1),
+            'view_mode': view,
             }
         self.response.out.write(render_template('templates/get-subtasks.html',
                                                 template_values))
