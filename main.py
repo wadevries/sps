@@ -392,19 +392,18 @@ class EditTask(webapp.RequestHandler):
         except (TypeError, ValueError):
             self.error(400)
             return
-
         user = api.get_and_validate_user(domain_identifier)
-        task = api.get_task(domain_identifier, task_identifier)
-        if not task or not user:
-            logging.error("No task '%s' or user '%s'" % (task, user))
-            self.error(404)
+        if not user:
+            self.error(401)
             return
-
         self.session = Session(writer='cookie',
                                wsgiref_headers=self.response.headers)
         try:
             description = self.request.get('description')
-            api.change_task_description(task, description, user)
+            task = api.change_task_description(domain_identifier,
+                                               task_identifier,
+                                               description,
+                                               user)
         except ValueError:
             self.error(403)
             self.response.out.write("Error while editing task: %s" % error)
