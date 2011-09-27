@@ -45,18 +45,24 @@ td.expand-control {
   padding-left: 4em;
 }
 
+.new-task-title {
+  margin-bottom: 0.5em;
+}
+
 a.plain {
   color: inherit;
   text-decoration: none;
 }
 
-.new-task-title {
-  font-size: 18;
-  margin-bottom: 0.5em;
+a.new-task-title {
+  font-size: 16;
+  font-weight: bold;
+  color: #06C;
+  text-decoration: none;
 }
 
-.new-task-title:hover {
-  background-color: #E5ECF9;
+a.new-task-title:hover {
+  color: #09f;
 }
 
 .empty-subtasks { width: 800px; height: 60px; }

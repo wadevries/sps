@@ -243,6 +243,11 @@ class GetSubTasks(webapp.RequestHandler):
         domain: The domain identifier string
         task: The parent task identifier string
         view: The type of requested subtasks: all, open or yours.
+        level: The level of the task in the interface. This value is
+           used to generate the property indentation in the template
+           rendering.
+        radio: If true, shows radio buttons instead of checkboxes next
+           to tasks. Used in the move UI.
     """
     def get(self):
         try:
@@ -250,6 +255,7 @@ class GetSubTasks(webapp.RequestHandler):
             task_identifier = self.request.get('task')
             view = self.request.get('view')
             level = int(self.request.get('level', 0))
+            show_radio_buttons = bool(self.request.get('radio', False))
         except (ValueError,TypeError):
             self.error(400)
             return
@@ -270,6 +276,7 @@ class GetSubTasks(webapp.RequestHandler):
                                        root_task=task,
                                        limit=200)
         else:                   # view == 'all' or None
+            view = 'all'
             user_id = user.identifier()
             tasks = api.get_all_direct_subtasks(domain_identifier,
                                                 root_task=task,
@@ -281,6 +288,8 @@ class GetSubTasks(webapp.RequestHandler):
             'user_name': user.name,
             'user_identifier': user.identifier(),
             'tasks': _task_template_values(tasks, user, level=level+1),
+            'view_mode': view,
+            'show_radio_buttons': show_radio_buttons,
             }
         self.response.out.write(render_template('templates/get-subtasks.html',
                                                 template_values))
@@ -309,6 +318,14 @@ class TaskEditView(webapp.RequestHandler):
             self.error(403)
             return
 
+        # Tasks that are used to create the navigation tasks for
+        # moving the task.
+        user_id = user.identifier()
+        tasks = api.get_all_direct_subtasks(domain_identifier,
+                                            root_task=None,
+                                            limit=200,
+                                            user_identifier=user_id)
+
         template_values = {
             'domain_name': domain.name,
             'domain_identifier': domain_identifier,
@@ -318,40 +335,11 @@ class TaskEditView(webapp.RequestHandler):
             'task_title' : task.title(),
             'task_description': task.description,
             'task_identifier': task.identifier(),
+            'tasks': _task_template_values(tasks, user),
+            'show_radio_buttons': True,
+            'view_mode': 'all',
             }
         self.response.out.write(render_template('templates/edittask.html',
-                                                template_values))
-
-
-class TaskMoveView(webapp.RequestHandler):
-    """
-    Handler to show the Move task gui.
-    """
-    def get(self, domain_identifier, task_identifier):
-        task = api.get_task(domain_identifier, task_identifier)
-        user = api.get_and_validate_user(domain_identifier)
-        if not task or not user:
-            self.error(404)
-            return
-
-        session = Session(writer='cookie',
-                          wsgiref_headers=self.response.headers)
-        user = api.get_logged_in_user()
-        domain = api.get_domain(domain_identifier)
-        tasks = api.get_all_tasks(domain_identifier, limit=200)
-
-        template_values = {
-            'domain_name': domain.name,
-            'domain_identifier': domain_identifier,
-            'user_name': user.name,
-            'user_identifier': user.identifier(),
-            'messages': get_and_delete_messages(session),
-            'task_title' : task.title(),
-            'task_description': task.description_body(),
-            'task_identifier': task.identifier(),
-            'tasks': _task_template_values(tasks, user),
-            }
-        self.response.out.write(render_template('templates/movetask.html',
                                                 template_values))
 
 
@@ -404,19 +392,18 @@ class EditTask(webapp.RequestHandler):
         except (TypeError, ValueError):
             self.error(400)
             return
-
         user = api.get_and_validate_user(domain_identifier)
-        task = api.get_task(domain_identifier, task_identifier)
-        if not task or not user:
-            logging.error("No task '%s' or user '%s'" % (task, user))
-            self.error(404)
+        if not user:
+            self.error(401)
             return
-
         self.session = Session(writer='cookie',
                                wsgiref_headers=self.response.headers)
         try:
             description = self.request.get('description')
-            api.change_task_description(task, description, user)
+            task = api.change_task_description(domain_identifier,
+                                               task_identifier,
+                                               description,
+                                               user)
         except ValueError:
             self.error(403)
             self.response.out.write("Error while editing task: %s" % error)
@@ -439,6 +426,7 @@ class MoveTask(webapp.RequestHandler):
         except (TypeError, ValueError):
             self.error(400)
             return
+        logging.info("d:%s t:%s p:%s", domain_identifier, task_identifier, new_parent_identifier)
         user = api.get_and_validate_user(domain_identifier)
         if not user:
             self.error(401)
@@ -544,7 +532,6 @@ _DOMAIN_OPEN = '/d/(%s)/open/?' % _VALID_DOMAIN_KEY_NAME
 
 _TASK_URL = '%s/task/(%s)/?' % (_DOMAIN_URL, _VALID_TASK_KEY_NAME)
 _TASK_EDIT_URL = "%s/edit/?" % (_TASK_URL,)
-_TASK_MOVE_URL = "%s/move/?" % (_TASK_URL,)
 
 webapp.template.register_template_library('templatetags.templatefilters')
 
@@ -559,7 +546,6 @@ application = webapp.WSGIApplication([('/create-task', CreateTask),
                                       (_DOMAIN_ALL, Overview),
                                       (_DOMAIN_OPEN, Overview),
                                       (_TASK_EDIT_URL, TaskEditView),
-                                      (_TASK_MOVE_URL, TaskMoveView),
                                       (_TASK_URL, TaskDetail),
                                       ('/', Landing)])
 

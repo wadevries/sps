@@ -1,0 +1,19 @@
+<tr class="{% if not task.active %}inactive-task-row {% endif %}task-row" level={{ task.level }}>
+  <td class="checkbox">
+    <div class="level{{ task.level }}">
+      <input type="radio" name="new_parent" value="{{ task.id }}">
+    </div>
+  </td>
+  <td class="expand-control">
+    <div class="level{{ task.level }}">
+      {% if not task.atomic %}
+      <a class="expandable" href="#" value="{{ task.id }}" view="{{ view_mode }}">
+	<img width="12" height="12" src="/images/expand.png">
+      </a>
+    </div>
+    {% endif %}
+  </td>
+  <td class="task-title level{{ task.level }}">{{ task.title|escape }}</td>
+  <td class="task-detail">{{ task.summary }}</td>
+  <td class="assignee">{{ task.assignee_description|escape }}</td>
+</tr>

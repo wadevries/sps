@@ -369,7 +369,6 @@ def assign_task(domain_identifier, task_identifier, user, assignee):
             raise ValueError("Task does not exist")
         if not can_assign_task(task, user, assignee):
             raise ValueError("Cannot assign")
-
         task.assignee = assignee
         workers.UpdateTaskCompletion.enqueue(domain_identifier,
                                              task.identifier(),
@@ -405,7 +404,6 @@ def set_task_completed(domain_identifier, user, task_identifier, completed):
         task = get_task(domain_identifier, task_identifier)
         if not task or not task.atomic() or not can_complete_task(task, user):
             raise ValueError("Invalid task")
-
         task.completed = completed
         workers.UpdateTaskCompletion.enqueue(domain_identifier,
                                              task.identifier(),
@@ -416,48 +414,18 @@ def set_task_completed(domain_identifier, user, task_identifier, completed):
     return db.run_in_transaction(txn)
 
 
-@db.transactional
-def _check_for_cycle(task, new_parent):
-    """
-    Check if assigning new_parent as the parent of task would result
-    in a cycle. This function must be run as part of a transaction
-    to get consistent results.
-
-    Args:
-        task: An instance of the Task model
-        new_parent: An instance of the Task model, or None, in which
-            case the function will always return True.
-
-    Returns:
-        False if the assignment is allowed. True if the assignment would
-        result in a cycle.
-
-    Raises:
-        ValueError: If used outside of a transaction or the tasks
-            are not in the same domain.
-    """
-    if not task.domain_identifier() == new_parent.domain_identifier():
-        raise ValueError("Tasks must be in the same domain")
-    visited = set([task.identifier()])
-    while new_parent:
-        if new_parent.identifier() in visited:
-            return True
-        visited.add(new_parent.identifier())
-        parent_identifier = new_parent.parent_task_identifier()
-        if parent_identifier:
-            new_parent = get_task(task.domain_identifier(), parent_identifier)
-        else:
-            new_parent = None
-    return False
-
-
-def change_task_description(task, description, user):
+def change_task_description(domain_identifier,
+                            task_identifier,
+                            description,
+                            user):
     """
     Changes the description of |task| to description. The change will
     be recorded by |user|. User must be able to edit the task.
 
     Args:
-        task: An instance of the task model
+        domain_identifier: The domain identifier string
+        task_identifier: The task identifier of the task that gets
+            the description updated.
         description: The new description of the task
         user: An instance of the user model.
 
@@ -469,15 +437,19 @@ def change_task_description(task, description, user):
         ValueError: The user is not able to edit the task or the
             description is empty.
     """
-    domain = get_domain(task.domain_identifier())
-    if not can_edit_task(domain, task, user):
-        raise ValueError("User '%s' can not edit task '%s'", (user, task))
     if not description:
         raise ValueError("Cannot set description to the empty string")
 
-    task.description = description
-    task.put()
-    return task
+    def txn():
+        task = get_task(domain_identifier, task_identifier)
+        domain = get_domain(task.domain_identifier())
+        if not can_edit_task(domain, task, user):
+            raise ValueError("User '%s' can not edit task '%s'", (user, task))
+        task.description = description
+        task.put()
+        return task
+
+    return db.run_in_transaction(txn)
 
 
 def change_task_parent(domain_identifier,
@@ -708,6 +680,41 @@ def get_all_direct_subtasks(domain_identifier,
     tasks = query.fetch(limit)
     _sort_tasks(tasks, user_identifier=user_identifier)
     return tasks
+
+
+@db.transactional
+def _check_for_cycle(task, new_parent):
+    """
+    Check if assigning new_parent as the parent of task would result
+    in a cycle. This function must be run as part of a transaction
+    to get consistent results.
+
+    Args:
+        task: An instance of the Task model
+        new_parent: An instance of the Task model, or None, in which
+            case the function will always return True.
+
+    Returns:
+        False if the assignment is allowed. True if the assignment would
+        result in a cycle.
+
+    Raises:
+        ValueError: If used outside of a transaction or the tasks
+            are not in the same domain.
+    """
+    if not task.domain_identifier() == new_parent.domain_identifier():
+        raise ValueError("Tasks must be in the same domain")
+    visited = set([task.identifier()])
+    while new_parent:
+        if new_parent.identifier() in visited:
+            return True
+        visited.add(new_parent.identifier())
+        parent_identifier = new_parent.parent_task_identifier()
+        if parent_identifier:
+            new_parent = get_task(task.domain_identifier(), parent_identifier)
+        else:
+            new_parent = None
+    return False
 
 
 def _sort_tasks(tasks, user_identifier=None):
