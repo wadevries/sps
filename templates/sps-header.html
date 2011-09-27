@@ -41,6 +41,7 @@
         $("#details-link", this).show() },
         function() { $("#details-link", this).hide()
       });
+
     }
 
     $(document).ready(function() {
@@ -56,10 +57,15 @@
 
       $("#description-textarea").keydown(function (e) {
         if (e.ctrlKey && e.which == 13) {
-          $("#new-task-form").submit()
-          return false
+          $("#new-task-form").submit();
+          return false;
         }
-        return true
+        else if (e.which == 27) {
+          toggleCreateTaskForm();
+          $("#description-textarea").blur();
+          return false;
+        }
+        return true;
       });
     });
   </script>
